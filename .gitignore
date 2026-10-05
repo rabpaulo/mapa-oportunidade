@@ -1,0 +1,14 @@
+data/
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+.pytest_cache/
+node_modules/
+.next/
+*.tsbuildinfo
+test-results/
+playwright-report/
+app/public/maplibre/
+*.log
