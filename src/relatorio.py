@@ -80,10 +80,10 @@ def _faixa(scores):
     return saida
 
 
-def gerar(escritos, stats, uf, meta, cidades_alvo, min_linhas, segundos,
+def gerar(escritos, stats, uf, meta, cidades_alvo, segundos,
           caminho, banco_em=None):
-    """Escreve o relatorio. `escritos` = [(segmento, linhas, arquivo), ...]"""
-    total = sum(n for _, n, _ in escritos)
+    """Escreve o relatorio. `escritos` = [(segmento, linhas), ...]"""
+    total = sum(n for _, n in escritos)
     L = []
     a = L.append
 
@@ -93,7 +93,7 @@ def gerar(escritos, stats, uf, meta, cidades_alvo, min_linhas, segundos,
 
     a(f"# Prospecção — {uf}")
     a("")
-    unidade = "planilhas" if any(x[2] for x in escritos) else "segmentos"
+    unidade = "segmentos"
     a(f"**{_mil(total)} contatos** em **{_mil(len(stats.cidades))} municípios**, "
       f"distribuídos em **{len(escritos)} {unidade}**.")
     a("")
@@ -108,13 +108,7 @@ def gerar(escritos, stats, uf, meta, cidades_alvo, min_linhas, segundos,
         tam = os.path.getsize(banco_em) / 1e6 if os.path.exists(banco_em) else 0
         a(f"| Banco | `{os.path.basename(banco_em)}` ({tam:.0f} MB) |")
     a("")
-    if banco_em:
-        a("Os contatos ficam no banco `contatos.db`, pesquisável por nome, "
-          "município e segmento. As planilhas são exportações sob demanda — "
-          "veja `src/exportar.py`.")
-    else:
-        a("Cada arquivo tem uma aba **Contatos** pronta para o importador do "
-          "DataRunner. Ordenados por `Score`, do melhor lead para o mais fraco.")
+    a("Os contatos ficam no banco `contatos.db`, pesquisável por nome, município e segmento.")
     a("")
 
     # ---- Funil ----
@@ -216,30 +210,18 @@ def gerar(escritos, stats, uf, meta, cidades_alvo, min_linhas, segundos,
     a("Ordenado por volume. `Cel.` = tem celular, `E-mail` = tem e-mail, "
       "`Sem dom.` = e-mail em provedor gratuito (candidato a site).")
     a("")
-    tem_arquivo = any(arq for _, _, arq in escritos)
-    cab_arq = " Arquivo |" if tem_arquivo else ""
-    a("| # | Segmento | Contatos | Cel. | E-mail | Sem dom. | Principal cidade |" + cab_arq)
-    a("|---:|---|---:|---:|---:|---:|---|" + ("---|" if tem_arquivo else ""))
-    for i, (segmento, n, arquivo) in enumerate(escritos, 1):
+    a("| # | Segmento | Contatos | Cel. | E-mail | Sem dom. | Principal cidade |")
+    a("|---:|---|---:|---:|---:|---:|---|")
+    for i, (segmento, n) in enumerate(escritos, 1):
         s = stats.por_segmento.get(segmento, Counter())
-        if segmento == "Outros segmentos":
-            cidade = "—"
-            cel = mail = semdom = "—"
-        else:
-            topo = stats.cidade_do_segmento.get(segmento, Counter()).most_common(1)
-            cidade = topo[0][0] if topo else "—"
-            cel = _mil(s.get("celular", 0))
-            mail = _mil(s.get("email", 0))
-            semdom = _mil(s.get("email", 0) - s.get("dominio", 0))
-        fim = f" `{arquivo}` |" if tem_arquivo else ""
+        topo = stats.cidade_do_segmento.get(segmento, Counter()).most_common(1)
+        cidade = topo[0][0] if topo else "—"
+        cel = _mil(s.get("celular", 0))
+        mail = _mil(s.get("email", 0))
+        semdom = _mil(s.get("email", 0) - s.get("dominio", 0))
         a(f"| {i} | {segmento} | {_mil(n)} | {cel} | {mail} | {semdom} | "
-          f"{cidade} |" + fim)
+          f"{cidade} |")
     a("")
-    if tem_arquivo:
-        a(f"Segmentos com menos de {min_linhas} contatos foram reunidos em "
-          "`outros-segmentos.xlsx` — filtre pela coluna `Segmento`.")
-    a("")
-
     # ---- Como refazer ----
     a("## Como refazer")
     a("")
@@ -247,16 +229,13 @@ def gerar(escritos, stats, uf, meta, cidades_alvo, min_linhas, segundos,
     a("# 1. baixar o cadastro (uma vez por mês; a Receita publica mensalmente)")
     a(f"python src/ingestar_receita.py --uf {uf}")
     a("")
-    a("# 2. gerar as planilhas (rápido, usa o que já está em disco)")
+    a("# 2. gerar o banco (rápido, usa o que já está em disco)")
     a(f"python src/gerar_leads.py --uf {uf}")
     a("```")
     a("")
     a("| Quero | Comando |")
     a("|---|---|")
-    a("| Outro estado | `python src/ingestar_receita.py --uf PR` e depois "
-      "`python src/gerar_leads.py --uf PR` |")
-    a("| Só algumas cidades | `python src/gerar_leads.py --cidades Blumenau Timbo` |")
-    a("| Menos arquivos, mais gordos | `python src/gerar_leads.py --min-linhas 8000` |")
+    a("| Só algumas cidades | `python src/gerar_leads.py --cidades Fortaleza Sobral` |")
     a("| Refazer só as razões sociais | "
       "`python src/ingestar_receita.py --somente-empresas` |")
     a("")

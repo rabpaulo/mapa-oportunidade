@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 import banco
@@ -30,9 +29,3 @@ def sample_data(tmp_path, monkeypatch):
     conn.execute('PRAGMA journal_mode=DELETE')
     conn.close()
     return tmp_path
-
-
-@pytest.fixture
-def client(sample_data):
-    from backend.main import app
-    return TestClient(app)

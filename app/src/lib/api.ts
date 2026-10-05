@@ -19,27 +19,10 @@ export type BaseInfo = {
   com_email?: number; com_celular?: number; sem_dominio?: number; score_medio?: number;
   tamanho_mb?: number; ia_configurada: boolean; modelo_ia: string;
 };
-export type Job = { status: 'ocioso' | 'rodando' | 'concluido' | 'erro'; linhas: string[]; iniciado_em: string | null; baixar_cadastro: boolean };
 export type AnalysisRow = Record<string, string | number>;
 export type ChatResult = { tipo: 'empresas'; titulo: string; filtros: Filters; total: number; itens: Contact[] } | { tipo: 'analise'; titulo: string; filtros: Filters; agrupar_por: string[]; itens: AnalysisRow[] };
 export type ChatResponse = { texto: string; resultados: ChatResult[]; fontes: { fonte: string; versao: string; filtros: Filters }[]; modelo: string };
 
-async function error(response: Response): Promise<never> {
-  const body = await response.json().catch(() => null);
-  throw new Error(typeof body?.detail === 'string' ? body.detail : 'Não foi possível concluir a operação. Confira os dados e tente novamente.');
-}
-export async function api<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch('/api/' + path, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? undefined : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal });
-  if (!response.ok) return error(response);
-  return response.json() as Promise<T>;
-}
-export async function exportContacts(filtros: Filters, ids: number[], base_gerada_em?: string) {
-  const response = await fetch('/api/exportar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filtros, ids, base_gerada_em }) });
-  if (!response.ok) await error(response);
-  const url = URL.createObjectURL(await response.blob());
-  const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'oportunidades-ceara.xlsx'; anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 export const number = (value: number | undefined) => new Intl.NumberFormat('pt-BR').format(value ?? 0);
 export const percent = (part: number, total: number) => (total ? part * 100 / total : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 export const date = (value: string | undefined) => value ? value.split(' ')[0].split('-').reverse().join('/') : '—';

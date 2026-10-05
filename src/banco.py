@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Banco SQLite de contatos, um por UF.
 
-Uma planilha de 114 mil linhas nao se pesquisa; um indice de texto responde na
-hora. O banco passa a ser a fonte, e o Excel vira exportacao sob demanda.
+O indice de texto permite pesquisar a base sem percorrer todos os contatos.
 
 Fica em data/uf/<UF>/contatos.db, para que cada estado seja independente:
 regerar SC nao encosta no PR, e apagar um estado e apagar uma pasta.

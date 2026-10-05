@@ -3,6 +3,7 @@ import gzip
 import io
 import json
 import subprocess
+import sqlite3
 import sys
 import zipfile
 from pathlib import Path
@@ -13,9 +14,8 @@ import requests
 import gerar_leads
 import ingestar_receita
 import receita
-from backend.database import metadata, search
-from backend.jobs import JobManager
-from backend.models import Filters, SearchRequest
+from pipeline.database import connection
+from pipeline.jobs import JobManager
 from scripts.coletar import main as collect
 
 
@@ -145,15 +145,20 @@ def test_full_collection_from_archives_to_published_sqlite(sample_data, source, 
     cache_ibge(sample_data)
     configure_pipeline(monkeypatch)
     assert collect([]) == 0
-    info = metadata()
+    with connection(sample_data / 'uf' / 'CE' / 'contatos.db') as conn:
+        info = dict(conn.execute('SELECT chave, valor FROM meta'))
+        info['contatos'] = conn.execute('SELECT COUNT(*) FROM contatos').fetchone()[0]
+        info['municipios'] = conn.execute('SELECT COUNT(*) FROM municipios').fetchone()[0]
     assert info['uf'] == 'CE'
     assert info['versao_receita'] == '2026-09-14'
     assert info['contatos'] == 2
     assert info['municipios'] == 2
-    result = search(SearchRequest(filtros=Filters(termo='são')))
-    assert result['total'] == 1
-    assert result['itens'][0]['email'] == 'padaria@gmail.com'
-    other = search(SearchRequest(filtros=Filters(cidade='Sobral')))['itens'][0]
+    with connection(sample_data / 'uf' / 'CE' / 'contatos.db') as conn:
+        conn.row_factory = sqlite3.Row
+        result = conn.execute("SELECT c.* FROM contatos_fts JOIN contatos c ON c.id=contatos_fts.rowid WHERE contatos_fts MATCH 'sao*'").fetchall()
+        assert len(result) == 1
+        assert result[0]['email'] == 'padaria@gmail.com'
+        other = conn.execute("SELECT * FROM contatos WHERE cidade='Sobral'").fetchone()
     assert other['empresa'] == 'Sertão Alimentos Ltda'
     assert other['nome'] == other['empresa']
     assert other['porte'] == 'Pequeno porte'
@@ -186,7 +191,7 @@ def test_failed_archive_download_keeps_previous_database(sample_data, source, mo
     assert not any('/Empresas' in url for url in requested)
 
 
-def test_terminal_and_browser_share_collection_lock(sample_data):
+def test_collectors_share_collection_lock(sample_data):
     guard = JobManager().acquire_collection_lock()
     other = JobManager()
     try:
@@ -225,7 +230,7 @@ def test_interrupted_collection_cleans_staging_and_preserves_data(sample_data, m
 
 
 def test_interrupt_stops_the_real_pipeline_child(tmp_path, monkeypatch):
-    from backend import jobs as module
+    from pipeline import jobs as module
     source_folder = tmp_path / 'src'
     source_folder.mkdir()
     (source_folder / 'waiting.py').write_text('import time\nprint("coletando", flush=True)\nwhile True: time.sleep(.1)\n')

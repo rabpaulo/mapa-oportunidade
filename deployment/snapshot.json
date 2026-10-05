@@ -1,0 +1,10 @@
+{
+  "url": null,
+  "version": "2026-09-14/2026-10-04 17:12",
+  "archive_sha256": "c5265d2eec1f596fc307c0f92cacd348f4c46b7432a93c41abe1edf3a16a4217",
+  "files": {
+    "uf/CE/contatos.db": "ad8687c211fdb8fd36166830bfc088860a70d32a56ec7683764e438db61d4819",
+    "ibge/malha_23.geojson": "c7d893b8e7c4daca7f064485c56c3a1ad7a9fa532a0145cd402ea7765bd43ceb",
+    "ibge/malha_br.geojson": "6d0125fce119ea0c78bf2a4a02aa18e4dd2a61a0b648fa555bc82a9aa7b6dcea"
+  }
+}

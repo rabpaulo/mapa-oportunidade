@@ -1,33 +1,39 @@
 {
   "name": "mapa-oportunidades-ceara",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "AGPL-3.0-only",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
   "scripts": {
     "postinstall": "node scripts/map-assets.mjs",
     "predev": "node scripts/map-assets.mjs",
     "prebuild": "node scripts/map-assets.mjs",
-    "dev": "next dev --hostname 127.0.0.1 -p 3000",
-    "build": "next build",
-    "start": "next start --hostname 127.0.0.1 -p 3000",
-    "typecheck": "tsc --noEmit",
+    "dev": "ng serve --host 127.0.0.1 --port 3000",
+    "build": "ng build",
+    "typecheck": "ngc --noEmit -p tsconfig.app.json",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "geist": "^1.7.2",
-    "lucide-react": "^1.43.0",
-    "maplibre-gl": "^6.12.0",
-    "next": "^16.3.8",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-markdown": "^10.1.0"
+    "@angular/common": "22.2.1",
+    "@angular/compiler": "22.2.1",
+    "@angular/core": "22.2.1",
+    "@angular/forms": "22.2.1",
+    "@angular/platform-browser": "22.2.1",
+    "@lucide/angular": "1.52.0",
+    "maplibre-gl": "6.12.0",
+    "marked": "^18.0.0",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.0",
+    "@angular/build": "22.2.1",
+    "@angular/cli": "22.2.1",
+    "@angular/compiler-cli": "22.2.1",
+    "@playwright/test": "1.58.0",
     "@types/geojson": "^7946.0.16",
-    "@types/node": "^22",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "typescript": "^5.7"
+    "@types/node": "^26.0.0",
+    "typescript": "~6.0.0"
   }
 }

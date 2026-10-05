@@ -7,7 +7,7 @@ As regras do importador do DataRunner mandam no formato:
   * E preciso pelo menos um endereco: e-mail ou CELULAR. Telefone fixo nao e
     canal de envio; uma linha que so tem fixo e contada e pulada. Por isso o
     celular vem primeiro na coluna Telefone e linhas sem celular e sem e-mail
-    ficam de fora das planilhas de campanha.
+    ficam de fora da base de contatos.
   * Dois numeros na mesma celula, separados por barra, viram dois cadastros.
 """
 

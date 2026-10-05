@@ -2,9 +2,8 @@
 """Monta o banco de contatos de uma UF a partir do cadastro ja ingerido.
 
 Uso:
-    python src/gerar_leads.py --uf SC
-    python src/gerar_leads.py --uf SC --cidades Blumenau Timbo
-    python src/gerar_leads.py --uf SC --xlsx        # exporta tambem as planilhas
+    python src/gerar_leads.py --uf CE
+    python src/gerar_leads.py --uf CE --cidades Fortaleza Sobral
 
 Entra: data/receita/*.csv.gz (veja ingestar_receita.py)
 Sai:   data/uf/<UF>/contatos.db  -- banco pesquisavel, fonte da interface
@@ -231,8 +230,8 @@ def carregar_versao(uf):
 
 
 def segmentos_do_banco(conn):
-    """[(segmento, contatos, None)] na ordem do relatorio."""
-    return [(r["nome"], r["contatos"], None) for r in conn.execute(
+    """[(segmento, contatos)] na ordem do relatorio."""
+    return [(r["nome"], r["contatos"]) for r in conn.execute(
         "SELECT nome, contatos FROM segmentos ORDER BY contatos DESC")]
 
 
@@ -241,10 +240,6 @@ def main():
     ap.add_argument("--uf", default="CE", choices=["CE"],
                     help="estado ja ingerido por ingestar_receita.py")
     ap.add_argument("--cidades", nargs="+", help="restringe a estes municipios")
-    ap.add_argument("--xlsx", action="store_true",
-                    help="exporta tambem uma planilha por segmento")
-    ap.add_argument("--min-linhas", type=int, default=400,
-                    help="com --xlsx, abaixo disso o segmento vai para Outros")
     ap.add_argument("--dados", help="pasta de dados (padrao: data/ do projeto)")
     args = ap.parse_args()
     if args.dados:
@@ -293,17 +288,13 @@ def main():
         ibge.garantir_malhas(DADOS, uf)
 
         escritos = segmentos_do_banco(conn)
-        if args.xlsx:
-            print("\nExportando planilhas...", flush=True)
-            import exportar
-            escritos = exportar.por_segmento(conn, destino, args.min_linhas)
     finally:
         conn.close()
 
     segundos = time.time() - inicio
     caminho = mod_relatorio.gerar(
         escritos, stats, uf, carregar_versao(uf), args.cidades,
-        args.min_linhas, segundos, os.path.join(destino, "_INDICE.md"),
+        segundos, os.path.join(destino, "_INDICE.md"),
         banco_em=caminho_db)
 
     tamanho = os.path.getsize(caminho_db) / 1e6

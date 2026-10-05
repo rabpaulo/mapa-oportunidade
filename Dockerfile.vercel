@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS api
+WORKDIR /src
+COPY global.json ./
+COPY server/Ceara.Api/Ceara.Api.csproj server/Ceara.Api/
+RUN dotnet restore server/Ceara.Api -r linux-x64
+COPY server/Ceara.Api/ server/Ceara.Api/
+RUN dotnet publish server/Ceara.Api -c Release -r linux-x64 --no-restore --self-contained false -o /publish /p:UseAppHost=false
+
+FROM node:26.10.0-bookworm-slim AS web
+WORKDIR /src/app
+COPY app/package.json app/package-lock.json ./
+COPY app/scripts/ scripts/
+RUN npm ci
+COPY app/ ./
+RUN npm run build
+
+FROM node:26.10.0-bookworm-slim AS snapshot
+WORKDIR /src
+COPY scripts/fetch-snapshot.mjs ./
+COPY deployment/ ./deployment/
+RUN node fetch-snapshot.mjs deployment/snapshot.json /snapshot deployment/snapshot-input/snapshot.tar.br
+
+# SDK target used by the local development launcher.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS development
+WORKDIR /workspace
+ENV CEARA_CONTAINER=1 PORT=8000 ASPNETCORE_ENVIRONMENT=Development
+ENTRYPOINT ["dotnet", "watch", "--no-hot-reload", "--project", "server/Ceara.Api", "run"]
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS production
+WORKDIR /app
+COPY --from=api /publish/ ./
+COPY --from=web /src/app/dist/ceara/browser/ ./wwwroot/
+COPY --from=snapshot /snapshot/ /snapshot/
+ENV PORT=8080 CEARA_CONTAINER=1 DOTNET_EnableDiagnostics=0 ASPNETCORE_ENVIRONMENT=Production \
+    CEARA_SNAPSHOT_ARCHIVE=/snapshot/snapshot.tar.br CEARA_SNAPSHOT_MANIFEST=/snapshot/snapshot.json CEARA_DATA_DIR=/tmp/ceara-data
+USER app
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "Ceara.Api.dll"]

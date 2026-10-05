@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('mapa real, seleção de município e tema escuro', async ({ page }) => {
+test('mapa real, seleção de município e persistência dos temas', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto('/');
@@ -8,11 +8,16 @@ test('mapa real, seleção de município e tema escuro', async ({ page }) => {
   await expect(page.locator('.map-canvas canvas')).toBeVisible();
   expect((await page.locator('.map-canvas').boundingBox())?.height).toBeGreaterThan(400);
   await expect(page.locator('.map-status')).toHaveCount(0);
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'escuro');
   await page.locator('.municipality-list button').filter({ hasText: 'Fortaleza' }).click();
   await expect(page.getByRole('heading', { name: 'Fortaleza', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Explorar empresas', exact: true }).click();
   await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
   await expect(page.getByRole('combobox').filter({ has: page.locator('option[value="Fortaleza"]') }).first()).toHaveValue('Fortaleza');
+  await page.getByRole('button', { name: 'Ativar tema claro' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'claro');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'claro');
   await page.getByRole('button', { name: 'Ativar tema escuro' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-tema', 'escuro');
   await page.reload();
@@ -20,28 +25,80 @@ test('mapa real, seleção de município e tema escuro', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('filtros, detalhes, seleção, paginação e download Excel', async ({ page }) => {
+test('mapa offline preserva seleção, comparação e acesso às empresas', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('https://tiles.openfreemap.org/**', route => route.abort());
+  await page.goto('/');
+  await expect(page.locator('.map-status')).toHaveCount(0);
+  await expect(page.locator('.map-source')).toContainText('ruas indisponíveis');
+  await page.getByRole('button', { name: 'Mapa offline', exact: true }).click();
+  await expect(page.locator('.map-source')).toContainText('disponível offline');
+  await page.getByRole('button', { name: 'Selecionar Sobral', exact: true }).click();
+  await expect(page.locator('.map-city-card')).toContainText('Sobral');
+  await page.getByLabel('Comparar por').selectOption('score_medio');
+  await expect(page.locator('.map-legend')).toContainText('Score médio');
+  await expect(page.locator('.map-legend')).not.toContainText('Escala logarítmica');
+  await expect(page.locator('.map-city-card')).toContainText('Sobral');
+  await page.getByRole('button', { name: 'Ativar tema claro' }).click();
+  await expect(page.locator('.map-status')).toHaveCount(0);
+  await expect(page.locator('.map-city-card')).toContainText('Sobral');
+  await page.getByRole('button', { name: 'Enquadrar Ceará' }).click();
+  await expect(page.locator('.map-city-card')).toHaveCount(0);
+  await page.getByLabel('Buscar município').fill('Fortaleza');
+  await expect(page.locator('.municipality-list li')).toHaveCount(1);
+  await page.locator('.municipality-list button').click();
+  await page.getByRole('button', { name: 'Ver empresas de Fortaleza' }).click();
+  await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
+  await expect(page.locator('.active-filters')).toContainText('Fortaleza');
+  expect(errors).toEqual([]);
+});
+
+test('falha dos tiles de ruas mantém a malha local utilizável', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('https://tiles.openfreemap.org/planet', route => route.fulfill({ status: 503, body: 'Mapa de ruas indisponível' }));
+  await page.goto('/');
+  await expect(page.locator('.map-source')).toContainText('ruas indisponíveis');
+  await expect(page.locator('.map-status')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Selecionar Fortaleza', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Fortaleza', exact: true })).toBeVisible();
+  await page.getByLabel('Comparar por').selectOption('com_celular');
+  await expect(page.locator('.map-legend')).toContainText('Com celular');
+  expect(errors).toEqual([]);
+});
+
+test('filtros, detalhes e paginação sem controles de exportação', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('navigation').getByRole('button', { name: 'Empresas', exact: true }).click();
   await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
   await page.getByLabel('Buscar empresas').fill('padaria');
   await expect(page.locator('.active-filters')).toContainText('padaria');
   await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
-  await page.locator('.company-name').first().click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.getByRole('dialog')).toContainText('CNPJ');
+  const company = page.locator('.company-name').first();
+  await company.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('CNPJ');
+  await expect(dialog).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.locator('button, a[href]').last()).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Fechar detalhes' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.locator('.contacts-table tbody input[type="checkbox"]').first().check();
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Exportar 1', exact: true }).click();
-  expect((await download).suggestedFilename()).toBe('oportunidades-ceara.xlsx');
+  await expect(company).toBeFocused();
+  await expect(page.locator('.contacts-table input[type="checkbox"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Exportar/i })).toHaveCount(0);
   await page.getByRole('button', { name: 'Próxima página', exact: true }).click();
   await expect(page.locator('.pagination')).toContainText('Página 2');
-  await expect(page.getByRole('button', { name: 'Exportar 1', exact: true })).toBeVisible();
+  await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
 });
 
-test('ramos abrem um recorte e a manutenção mostra a origem', async ({ page }) => {
+test('ramos abrem um recorte e Base mostra somente origem e versão', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('navigation').getByRole('button', { name: 'Ramos', exact: true }).click();
   await page.getByLabel('Buscar ramo').fill('padaria');
@@ -52,7 +109,9 @@ test('ramos abrem um recorte e a manutenção mostra a origem', async ({ page })
   await page.getByRole('navigation').getByRole('button', { name: 'Base', exact: true }).click();
   await expect(page.locator('.base-facts')).toContainText('680.298');
   await expect(page.locator('.base-facts')).toContainText('14/09/2026');
-  await expect(page.getByRole('button', { name: 'Regenerar com dados locais', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Regenerar|Atualizar|Baixar/i })).toHaveCount(0);
+  await expect(page.locator('.base-layout input, .base-layout textarea')).toHaveCount(0);
+  await expect(page.locator('.base-provenance')).toContainText(['Dados Abertos CNPJ', 'O Gemini recebe']);
 });
 
 test('assistente aceita conversa geral, preserva a sessão e mostra análises', async ({ page }) => {

@@ -13,7 +13,7 @@ def import_base(source: Path, target: Path):
         print('A base do Ceará já existe; nenhum dado foi sobrescrito.')
         return
     if not original.is_file():
-        raise SystemExit(f'Base CE não encontrada em {original}. Use a aba Base para baixar o cadastro.')
+        raise SystemExit(f'Base CE não encontrada em {original}. Execute scripts/coletar.py para baixar o cadastro.')
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix('.importando')
     try:

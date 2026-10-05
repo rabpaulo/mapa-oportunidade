@@ -1,132 +1,92 @@
 # Mapa de Oportunidades Ceará
 
-Aplicação web local para explorar empresas do Ceará, comparar municípios e ramos, exportar contatos e conversar com um assistente generalista integrado ao Google Gemini.
+Aplicação pública em português para explorar empresas do Ceará, comparar municípios e ramos e conversar com um assistente integrado ao Gemini. Frontend **Angular 22**, API **ASP.NET Core / .NET 10 LTS** e SQLite com FTS5. A coleta e a preparação continuam em Python, executadas somente localmente.
 
-Interface Next.js/React/TypeScript, API FastAPI/Python, banco SQLite com FTS5 e mapas MapLibre com malhas locais do IBGE. Nenhum componente depende de Tauri ou Rust.
+A interface mantém os temas claro/escuro, o mapa MapLibre com malhas locais e fallback sem tiles externos, filtros combinados, paginação, detalhes de empresas e histórico de conversa durante a sessão. A aba Base apresenta a origem e a versão dos dados. Exportações e atualização pelo navegador foram removidas.
 
-## Iniciar
+## Desenvolvimento
 
-Requisitos: Linux, Python 3.11 ou superior, Node.js 20.9 ou superior e npm.
+Requisitos: Node.js 26 (ou uma versão compatível com Angular 22), npm e Docker com daemon ativo. A API de desenvolvimento roda em Docker; o Angular usa proxy para `/api`.
 
 ```bash
 ./iniciar.sh
 ```
 
-O comando prepara as dependências na primeira execução e inicia os dois serviços. Abra **http://localhost:3000**. `Ctrl+C` encerra a interface, a API e seus processos filhos. As portas 3000 e 8000 precisam estar livres.
+Abra `http://localhost:3000`. Ctrl+C encerra ambos os serviços. Com o SDK .NET 10 instalado, é possível usar `./iniciar.sh --nativo`. Os dados vêm de `data/` ou de `CEARA_DATA_DIR` no ambiente/arquivo `.env`.
 
-Para compilar e executar a versão de produção:
+Para o assistente, copie `.env.example` para `.env` e configure `GEMINI_API_KEY` e, opcionalmente, `GEMINI_MODEL`. A chave fica exclusivamente na API; nunca é incorporada aos assets Angular nem à imagem de produção. No deploy, use variáveis de ambiente do servidor.
 
-```bash
-./iniciar.sh --producao
-```
+O Gemini recebe perguntas, histórico textual, metadados, categorias e agregados. Resultados de ferramentas com identificação e contatos de empresas são enviados diretamente para a interface; esses registros não entram na resposta da ferramenta enviada ao modelo. Perguntas gerais usam o conhecimento do modelo, sem pesquisa na internet. O limite local é de cinco chamadas ao chat por IP por minuto; a aplicação apresenta erros de limite e de cota do provedor.
 
-Os serviços escutam somente em `127.0.0.1`. A interface encaminha `/api/*` para a API local; não há conta, login, hospedagem ou publicação automática.
-
-## Preparar os dados
-
-Este ambiente já possui uma cópia independente da base existente do Ceará: **680.298 contatos, 184 municípios e 147 ramos**, cadastro de **14/09/2026**. Os números mudam quando o cadastro é atualizado.
-
-Para importar uma base CE compatível de outro diretório, informe explicitamente a pasta de origem, que deve conter `data/uf/CE/contatos.db`:
+## Coleta local
 
 ```bash
-.venv/bin/python scripts/importar_base.py --origem /caminho/para/base-origem
-```
-
-A importação usa `sqlite3.Connection.backup`, aceita somente CE e não sobrescreve uma base existente. Copia também o recorte processado da Receita e as malhas em cache. O banco importado é independente da origem.
-
-Sem base de origem, abra **Base**, marque **Baixar novo cadastro** e inicie a atualização. O download original é nacional e pode consumir vários GB, embora apenas o recorte CE seja armazenado. Sem essa opção, o app regenera a base a partir dos arquivos locais.
-
-Cada atualização ocorre em uma pasta temporária. O banco é validado antes de substituir atomicamente a versão anterior. Consultas continuam disponíveis durante o processamento. Uma falha na geração ou validação preserva a base anterior. Reiniciar o servidor interrompe o acompanhamento da tarefa; inicie novamente pela aba Base. Pastas temporárias deixadas por um encerramento forçado não são utilizadas como base.
-
-### Coleta dos Dados Abertos CNPJ
-
-O coletor usa os módulos Python `src/receita.py` e `src/ingestar_receita.py`, com o recorte fixo em **CE**. Descobre a publicação mais recente no [espelho da Casa dos Dados](https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos/), baixa as tabelas de municípios/CNAEs e os dez ZIPs de Estabelecimentos. Filtra `UF=CE` e situação cadastral `02` (ativa), gravando o CSV compactado em fluxo. Depois percorre os dez ZIPs de Empresas e guarda as razões sociais e portes dos CNPJs básicos encontrados. Cada ZIP nacional é apagado após a leitura.
-
-O processamento aplica os critérios originais de nomes, e-mails, telefones, ramos e score, monta o SQLite e o índice FTS5, associa os municípios ao IBGE e prepara as malhas. A publicação só ocorre depois da validação.
-
-Na interface, use **Base → Baixar novo cadastro → Baixar e atualizar Ceará**. Pelo terminal, após preparar o ambiente Python, o mesmo fluxo pode ser executado sem iniciar o servidor web:
-
-```bash
-# Coleta completa e publicação segura da nova base CE
+./scripts/preparar_python.sh
 .venv/bin/python scripts/coletar.py
-
-# Diretório alternativo ou regeneração dos recortes já baixados
-.venv/bin/python scripts/coletar.py --dados /caminho/para/dados
+# Reprocessar os arquivos já coletados:
 .venv/bin/python scripts/coletar.py --reaproveitar
+# Importar uma base CE compatível sem sobrescrever dados existentes:
+.venv/bin/python scripts/importar_base.py --origem /caminho/para/base
 ```
 
-Os logs de download e processamento aparecem no terminal. O comando retorna código `0` quando conclui, `1` em caso de erro e `130` ao interromper com `Ctrl+C`, encerrando o processo de coleta e preservando a base anterior. Uma trava por diretório impede que o terminal e a interface publiquem duas atualizações simultâneas. Os módulos em `src/` continuam disponíveis para uso individual em um diretório de trabalho; `scripts/coletar.py` é a entrada recomendada para preservar a base anterior.
+A Receita distribui arquivos nacionais, cujo download pode consumir vários GB. Apenas o Ceará é preservado. A coleta usa uma trava entre processos, prepara uma geração temporária, valida o SQLite e os códigos IBGE e publica atomicamente. Leitores da geração anterior continuam com seu snapshot até encerrar a consulta. Python e arquivos de origem não fazem parte do runtime hospedado.
 
-```text
-data/receita/       recorte CE e tabelas auxiliares
-data/uf/CE/        contatos.db e relatório da geração
-data/ibge/         malhas e municípios em cache
-```
+## Release e container
 
-Para mudar o armazenamento, configure `CEARA_DATA_DIR` no `.env`. Uma importação explícita deve então usar `--destino /esse/mesmo/caminho`. Dados, ambientes e chaves são ignorados pelo Git.
-
-## Configurar a IA gratuita
-
-1. Crie um projeto e uma chave em [Google AI Studio](https://aistudio.google.com/apikey), usando o nível gratuito.
-2. Copie o exemplo e edite o arquivo local:
+Por enquanto, o projeto usa **snapshot local, sem Vercel Blob**. O banco não entra no Git. O release usa a API de backup do SQLite, verifica integridade/FTS/municípios, inclui as duas malhas GeoJSON e gera um arquivo Brotli reproduzível com SHA-256 do arquivo e de cada item.
 
 ```bash
-cp .env.example .env
+.venv/bin/python scripts/preparar_release.py --saida releases/ce-nova-versao --fixar
+./iniciar.sh --producao
+# Alternativa com .NET instalado:
+./iniciar.sh --nativo --producao
 ```
 
-```dotenv
-GEMINI_API_KEY=sua_chave
-GEMINI_MODEL=gemini-3.5-flash-lite
-```
+`--fixar` grava apenas versão, URL opcional e checksums em `deployment/snapshot.json`, e copia o arquivo comprimido para `deployment/snapshot-input/snapshot.tar.br` (ignorado pelo Git). Escolha um diretório de release novo a cada execução; versões existentes não são sobrescritas.
 
-3. Reinicie `./iniciar.sh`.
-
-A chave é carregada apenas pelo backend. Não a coloque em variáveis `NEXT_PUBLIC_*`, no frontend ou no Git. A interface mostra somente se a IA está configurada.
-
-O modelo padrão possui entrada e saída gratuitas na [tabela de preços do Gemini](https://ai.google.dev/gemini-api/docs/pricing). As [cotas variam por projeto](https://ai.google.dev/gemini-api/docs/rate-limits); a aplicação trata esgotamento de quota, chave recusada, indisponibilidade e timeout, sem mudar para serviços pagos ou ativar faturamento. Uma chave vinculada a um projeto pago segue as condições daquele projeto.
-
-O assistente aceita perguntas gerais, redação, explicações e aconselhamento. Para perguntas sobre a base, usa ferramentas estruturadas com filtros validados e SQL parametrizado. Não executa SQL arbitrário, não altera dados e não pesquisa na internet.
-
-O Gemini recebe perguntas e histórico da conversa, categorias e resultados agregados. Nomes, CNPJs, e-mails, telefones e endereços retornados pelas buscas são apresentados diretamente na aplicação, sem integrar o retorno enviado ao modelo. Evite escrever informações pessoais ou confidenciais nas próprias perguntas: os [termos do serviço gratuito](https://ai.google.dev/gemini-api/terms) permitem uso do conteúdo enviado para melhorar produtos do Google. A conversa permanece na memória da página durante a sessão e pode ser apagada em **Nova conversa**.
-
-## Explorar e exportar
-
-- **Mapa:** Ceará e seus municípios, com comparação por quantidade, celular, e-mail sem domínio e score. A lista oferece acesso por teclado aos mesmos municípios do mapa.
-- **Empresas:** busca por prefixos sem acentos, filtros combinados, paginação, seleção entre páginas e detalhes. Filtros podem ser recolhidos.
-- **Ramos:** volume, qualidade de contato e score por agrupamento comercial.
-- **Assistente:** conversa geral, análises e tabelas locais; respostas baseadas em dados incluem versão e filtros.
-- **Base:** origem, versão, regeneração e logs.
-
-A exportação respeita todos os filtros da busca. Havendo seleção explícita, exporta somente os IDs selecionados, independentemente dos demais filtros. O Excel usa a aba **Contatos** e as colunas do importador DataRunner, com telefones/CNPJs como texto e links para os canais de contato.
-
-Consultas, fontes e mapas funcionam offline após instalar as dependências e preparar os dados. IA e atualização exigem internet. As perguntas gerais usam o conhecimento do modelo; não representam informações atuais verificadas.
-
-## Limites dos dados
-
-A base reúne estabelecimentos ativos na data do cadastro **com e-mail ou celular aproveitável**, e não todas as empresas do Ceará. Dados cadastrais não comprovam operação atual ou intenção de compra.
-
-O score e as sugestões por ramo usam critérios de priorização voltados a serviços digitais. **Sem domínio próprio** significa e-mail em provedor gratuito e não comprova ausência de site. **Abertura** contém somente o ano. Não há faturamento, número de funcionários ou histórico temporal na base de contatos. Os ramos são agrupamentos derivados de CNAEs.
-
-## Desenvolvimento e validação
+O Dockerfile compila Angular e C# em estágios separados. A imagem final contém ASP.NET Core, assets e snapshot comprimido, sem Node, Python, SDK ou chave Gemini. No primeiro startup, a API confere os checksums, extrai somente os três arquivos permitidos em `/tmp/ceara-data`, valida banco, versão e malhas e só então inicia o servidor. A pasta fica fora de `wwwroot`; conexões SQLite são somente leitura. Reinícios no mesmo container reutilizam a geração já validada.
 
 ```bash
-# Testes de coleta CNPJ, API, consultas, exportação, atualização e Gemini simulado
+docker build -f Dockerfile.vercel -t ceara:local .
+docker run --rm -p 127.0.0.1:8080:8080 -e GEMINI_API_KEY -e GEMINI_MODEL ceara:local
+```
+
+Com Docker direto, as variáveis Gemini são lidas do ambiente do shell. O launcher também lê `.env` e encaminha os valores ao processo do servidor. `CEARA_DATA_DIR` local define somente a montagem de desenvolvimento; a produção restaura o snapshot na pasta privada da imagem.
+
+A versão completa atual tem 680.298 empresas, 184 municípios e 147 ramos. O cadastro é de 14/09/2026; os dados foram gerados em 04/10/2026. O snapshot local fica fixado pelo manifesto; futuras coletas devem produzir um novo release e uma nova imagem.
+
+## Vercel
+
+`vercel.json` configura um serviço `container` e encaminha todos os caminhos ao ASP.NET Core, que serve Angular e `/api` no mesmo domínio. O `PORT` deve ser **8080**, também nas configurações do projeto. Containers e Services utilizam recursos beta. Consulte o [guia ASP.NET Core da Vercel](https://vercel.com/kb/guide/dot-net-asp-net-on-vercel-with-docker).
+
+Nenhum projeto Vercel foi criado ou publicado nesta migração. Sem armazenamento remoto, builds a partir somente do Git não têm o snapshot: prepare-o localmente antes de enviar o contexto ou publicar uma imagem pré-construída. `.vercelignore` preserva o arquivo preparado e exclui dados originais, dependências, caches e segredos. A compressão Brotli mantém o contexto abaixo do limite de upload de 100 MB do plano Hobby. Verifique o tamanho após cada novo release; a base pode crescer. Veja os [limites da Vercel](https://vercel.com/docs/limits). Uma URL HTTPS imutável pode ser fixada no manifesto posteriormente; o build baixa o snapshot e verifica seu checksum, sem depender de Blob.
+
+Antes de produção, crie um preview e verifique startup a frio, consumo de memória/disco, `/`, `/api/saude`, buscas, malhas e mesma origem no domínio do preview. Configure `GEMINI_API_KEY` somente no servidor e uma regra de Firewall: caminho igual a `/api/chat`, método POST, janela fixa de 60 segundos, cinco solicitações, chave IP, ação 429. Essa regra precisa ser aplicada ao projeto Vercel; o limitador da API protege cada instância e não substitui o limite no edge. Os contadores WAF são regionais, conforme a [documentação de rate limiting](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting).
+
+Atualize dados com coleta local → release → nova imagem → preview → publicação. Rollback restaura o deployment anterior com seu snapshot incorporado; mantenha os releases antigos para reconstrução. Não substitua um arquivo remoto já referenciado por um manifesto publicado.
+
+## Verificação
+
+```bash
 .venv/bin/python -m pytest -q
-
-# Compilação e tipos
-npm --prefix app run build
-npm --prefix app run typecheck
-
-# Testes no navegador: execute ./iniciar.sh em outro terminal
+dotnet test server/Ceara.Tests
 cd app
+npm ci
+npm run typecheck
+npm run build
 npx playwright install chromium
+# Com a aplicação em execução:
 npm run test:e2e
 ```
 
-Os testes de coleta usam ZIPs pequenos no layout da Receita e respostas HTTP simuladas, exercitando o download, recorte CE, cruzamento de empresas e geração/publicação real do SQLite. Os testes do Gemini simulam respostas do provedor e erros para não consumir cotas. Uma chamada real exige sua chave local. Os testes de navegador utilizam a base preparada, sem iniciar downloads nacionais. A documentação da API fica em **http://localhost:8000/api/docs**.
+A API preserva os contratos portugueses de saúde, base, busca, detalhes, facetas, municípios, ramos, análises, malhas e chat. SQL é parametrizado; dimensões, métricas e ordenação usam listas permitidas. Consultas têm orçamento de 15 segundos e chamadas Gemini têm timeout de 45 segundos por rodada, com até cinco rodadas. A especificação fica em `/api/openapi.json`.
 
-## Licença e atribuição
+Os testes .NET cobrem busca com acentos/prefixos, filtros combinados, paginação, ordenação, agregados, facetas, validação, bancos ausentes/inválidos, origem, privacidade das ferramentas Gemini, erros do provedor, cotas, timeout e validação do snapshot. Os testes Python preservam coleta/importação, travas e publicação atômica e verificam os releases. Playwright cobre mapas, fallback offline, empresas, detalhes, ramos, chat, temas, layout móvel e ausência de controles de exportação/atualização.
 
-**AGPL-3.0-only**, conforme [LICENSE](LICENSE). Os componentes originais de processamento, exportação, critérios comerciais e cálculos geométricos são copyright © 2026 Ivo Braatz. As adaptações web e a integração Gemini estão nesta mesma licença. Os avisos de autoria e alterações estão em [NOTICE](NOTICE).
+Os resultados da migração, medidas do container e limitações de implantação estão em [Verificação da migração](docs/migration-verification.md).
 
-Dados: Dados Abertos CNPJ da Receita Federal, pelo espelho da Casa dos Dados; códigos e malhas do IBGE. Ao usar a base para contato, considere que cadastros de MEIs podem conter canais pessoais.
+## Fontes e licença
+
+Dados Abertos CNPJ da Receita Federal; geometrias e códigos de municípios do IBGE; tiles externos do OpenFreeMap/OpenStreetMap, com fallback para as malhas locais. A base reúne estabelecimentos ativos na data do cadastro, com e-mail ou celular aproveitável. “Sem domínio próprio” deriva do e-mail e não comprova ausência de site; score é uma priorização para serviços digitais.
+
+**AGPL-3.0-only**, conforme [LICENSE](LICENSE). Os componentes originais de processamento, critérios comerciais e cálculos geométricos são copyright © 2026 Ivo Braatz. Consulte [NOTICE](NOTICE).

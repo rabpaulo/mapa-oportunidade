@@ -3,8 +3,8 @@ import sqlite3
 
 import pytest
 
-from backend.database import validate_database
-from backend.jobs import JobManager
+from pipeline.database import validate_database
+from pipeline.jobs import JobManager
 
 
 def test_failed_generation_preserves_previous_database(sample_data, monkeypatch):

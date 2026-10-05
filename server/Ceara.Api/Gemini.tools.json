@@ -1,0 +1,175 @@
+[
+  {
+    "functionDeclarations": [
+      {
+        "name": "buscar_empresas",
+        "description": "Encontra empresas da base CE e exibe uma tabela local com identificação e contatos. A IA recebe somente total, filtros e quantidade exibida.",
+        "parameters": {
+          "type": "OBJECT",
+          "properties": {
+            "filtros": {
+              "type": "OBJECT",
+              "properties": {
+                "termo": {
+                  "type": "STRING",
+                  "description": "Busca por prefixos em nome, empresa, município e ramo."
+                },
+                "cidade": {
+                  "type": "STRING"
+                },
+                "cidades": {
+                  "type": "ARRAY",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "segmento": {
+                  "type": "STRING"
+                },
+                "segmentos": {
+                  "type": "ARRAY",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "bairro": {
+                  "type": "STRING"
+                },
+                "porte": {
+                  "type": "STRING"
+                },
+                "ano_minimo": {
+                  "type": "INTEGER"
+                },
+                "ano_maximo": {
+                  "type": "INTEGER"
+                },
+                "score_minimo": {
+                  "type": "INTEGER"
+                },
+                "somente_celular": {
+                  "type": "BOOLEAN"
+                },
+                "somente_email": {
+                  "type": "BOOLEAN"
+                },
+                "somente_sem_dominio": {
+                  "type": "BOOLEAN"
+                },
+                "ordem": {
+                  "type": "STRING",
+                  "enum": [
+                    "score",
+                    "nome",
+                    "cidade",
+                    "recente",
+                    "antiga"
+                  ]
+                }
+              }
+            },
+            "limite": {
+              "type": "INTEGER"
+            }
+          }
+        }
+      },
+      {
+        "name": "analisar_base",
+        "description": "Calcula contagens, médias de score, contatos por canal e percentuais. Agrupa por até duas dimensões; sem agrupamento calcula o total filtrado. Cada empresa só é contada uma vez.",
+        "parameters": {
+          "type": "OBJECT",
+          "properties": {
+            "filtros": {
+              "type": "OBJECT",
+              "properties": {
+                "termo": {
+                  "type": "STRING",
+                  "description": "Busca por prefixos em nome, empresa, município e ramo."
+                },
+                "cidade": {
+                  "type": "STRING"
+                },
+                "cidades": {
+                  "type": "ARRAY",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "segmento": {
+                  "type": "STRING"
+                },
+                "segmentos": {
+                  "type": "ARRAY",
+                  "items": {
+                    "type": "STRING"
+                  }
+                },
+                "bairro": {
+                  "type": "STRING"
+                },
+                "porte": {
+                  "type": "STRING"
+                },
+                "ano_minimo": {
+                  "type": "INTEGER"
+                },
+                "ano_maximo": {
+                  "type": "INTEGER"
+                },
+                "score_minimo": {
+                  "type": "INTEGER"
+                },
+                "somente_celular": {
+                  "type": "BOOLEAN"
+                },
+                "somente_email": {
+                  "type": "BOOLEAN"
+                },
+                "somente_sem_dominio": {
+                  "type": "BOOLEAN"
+                },
+                "ordem": {
+                  "type": "STRING",
+                  "enum": [
+                    "score",
+                    "nome",
+                    "cidade",
+                    "recente",
+                    "antiga"
+                  ]
+                }
+              }
+            },
+            "agrupar_por": {
+              "type": "ARRAY",
+              "items": {
+                "type": "STRING",
+                "enum": [
+                  "cidade",
+                  "bairro",
+                  "segmento",
+                  "porte",
+                  "abertura"
+                ]
+              }
+            },
+            "ordenar_por": {
+              "type": "STRING",
+              "enum": [
+                "contatos",
+                "com_email",
+                "com_celular",
+                "sem_dominio",
+                "score_medio"
+              ]
+            },
+            "limite": {
+              "type": "INTEGER"
+            }
+          }
+        }
+      }
+    ]
+  }
+]

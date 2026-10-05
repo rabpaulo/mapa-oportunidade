@@ -1,0 +1,41 @@
+<div class="app-shell">
+  <a class="skip-link" href="#main">Ir para o conteúdo</a>
+  <header class="site-header">
+    <button class="brand" (click)="store.screen.set('mapa')" aria-label="Mapa de Oportunidades Ceará, início"><span>Mapa de Oportunidades<strong>Ceará</strong></span></button>
+    <nav aria-label="Navegação principal">
+      @for (item of nav; track item.id) {
+        <button [class.active]="store.screen() === item.id" [attr.aria-current]="store.screen() === item.id ? 'page' : null" (click)="store.screen.set(item.id)"><ceara-icon [name]="item.icon" /><span>{{ item.title }}</span></button>
+      }
+    </nav>
+    <div class="header-end"><span class="local-status"><span class="status-dot" [attr.data-ready]="!!base()?.disponivel"></span>Base do Ceará</span><button class="icon-button" (click)="toggleTheme()" [attr.aria-label]="theme() === 'claro' ? 'Ativar tema escuro' : 'Ativar tema claro'"><ceara-icon [name]="theme() === 'claro' ? 'moon' : 'sun'" [size]="18" /></button></div>
+  </header>
+  <main id="main">
+    <div class="page-heading"><div><h1>{{ heading()[0] }}</h1><p>{{ heading()[1] }}</p></div><div class="edition"><span>Cadastro Receita Federal</span><strong>{{ date(base()?.versao_receita) }}</strong></div></div>
+    @if (error()) {
+      <div class="empty error" role="alert"><h2>Não foi possível abrir a aplicação</h2><p>{{ error() }}</p><button class="button" (click)="reload()">Tentar novamente</button></div>
+    } @else if (base(); as info) {
+      @switch (store.screen()) {
+        @case ('assistente') { <ceara-assistant [base]="info" /> }
+        @case ('base') { <ceara-base [base]="info" /> }
+        @default {
+          @if (!info.disponivel) {
+            <div class="empty"><ceara-icon name="database" [size]="32" /><h2>Base ainda não disponível</h2><p>{{ info.erro }}</p><button class="button" (click)="reload()">Tentar novamente</button></div>
+          } @else {
+            @switch (store.screen()) {
+              @case ('mapa') {
+                <div class="stats-strip"><div><span>Empresas com contato</span><strong>{{ number(info.contatos) }}</strong></div><div><span>Municípios</span><strong>{{ number(info.municipios) }}<small>/ 184</small></strong></div><div><span>Com celular</span><strong>{{ percent(info.com_celular ?? 0, info.contatos ?? 0) }}</strong></div><div><span>Ramos de atividade</span><strong>{{ number(info.ramos) }}</strong></div></div>
+                @defer (on immediate) { <ceara-map [base]="info" [areas]="areas()" [theme]="theme()" (openCity)="openCity($event)" /> }
+                <div class="map-bottom-note"><p>Estabelecimentos ativos na data do cadastro, com e-mail ou celular aproveitável.</p><button class="text-button" (click)="store.screen.set('assistente')">Consultar com o assistente <ceara-icon name="arrow-up-right" [size]="15" /></button></div>
+              }
+              @case ('empresas') { <ceara-companies [areas]="areas()" [segments]="segments()" [generation]="info.gerado_em" /> }
+              @case ('ramos') { <ceara-segments [segments]="segments()" (openSegment)="openSegment($event)" /> }
+            }
+          }
+        }
+      }
+    } @else {
+      <div class="loading-page"><div class="skeleton"></div><div class="skeleton"></div><span role="status">Abrindo a base do Ceará…</span></div>
+    }
+  </main>
+  <footer class="site-footer"><span>Mapa de Oportunidades Ceará</span><span>Dados Receita Federal e IBGE <span class="footer-separator">/</span> <a href="https://github.com/rabpaulo/mapa-oportunidade" target="_blank" rel="noopener noreferrer">Código-fonte</a> · AGPL-3.0</span></footer>
+</div>

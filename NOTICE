@@ -1,14 +1,21 @@
 Mapa de Oportunidades Ceará
 
-Os componentes originais de processamento de dados, exportação, critérios
+Os componentes originais de processamento de dados, critérios
 comerciais e cálculos geométricos são copyright © 2026 Ivo Braatz.
 
 Adaptações de outubro de 2026: aplicação web local exclusiva para o Ceará,
 API HTTP, integração com o Google Gemini, publicação segura da base e nova
-identidade visual.
+identidade visual. Migração para Angular 22 e ASP.NET Core (.NET 10),
+remoção de exportações, coleta Python somente local e snapshots validados
+para publicação em container.
 
 Este trabalho é distribuído sob a GNU Affero General Public License,
 versão 3 (AGPL-3.0-only). A licença completa está no arquivo LICENSE.
 Este software é fornecido sem garantia, conforme os termos da licença.
 
 Código-fonte: https://github.com/rabpaulo/mapa-oportunidade
+
+As fontes Geist Sans e Geist Mono são copyright © 2023 Vercel,
+em colaboração com basement.studio,
+distribuídas sob SIL Open Font License 1.1. A licença acompanha os arquivos
+em app/public/fonts/LICENSE.txt.

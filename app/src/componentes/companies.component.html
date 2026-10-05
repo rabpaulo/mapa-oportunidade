@@ -1,0 +1,35 @@
+<section class="companies-layout" [attr.data-filters]="showFilters()">
+  <aside class="filters-panel" [formGroup]="form">
+    <div class="filters-heading"><h2><ceara-icon name="sliders-horizontal" /> Filtros</h2><button class="text-button" (click)="clear()">Limpar</button></div>
+    <label class="field"><span>Município</span><select formControlName="cidade"><option value="">Todo o Ceará</option>@for (area of cities(); track area.nome) { <option [value]="area.nome">{{ area.nome }} · {{ number(area.contatos) }}</option> }</select></label>
+    <label class="field"><span>Ramo de atividade</span><select formControlName="segmento"><option value="">Todos os ramos</option>@for (area of branches(); track area.nome) { <option [value]="area.nome">{{ area.nome }} · {{ number(area.contatos) }}</option> }</select></label>
+    <label class="field"><span>Porte</span><select formControlName="porte"><option value="">Todos os portes</option>@for (port of ports; track port) { <option>{{ port }}</option> }</select></label>
+    <label class="field"><span>Bairro</span><input formControlName="bairro" placeholder="Nome completo do bairro" /></label>
+    <label class="field"><span>Score mínimo <strong>{{ store.filters().score_minimo }}</strong></span><input type="range" min="0" max="100" step="5" formControlName="score_minimo" /></label>
+    <div class="year-fields"><label class="field"><span>Abertura desde</span><input type="number" min="1800" max="2200" placeholder="Ano" formControlName="ano_minimo" /></label><label class="field"><span>Até</span><input type="number" min="1800" max="2200" placeholder="Ano" formControlName="ano_maximo" /></label></div>
+    <div class="filter-checks">@for (check of checks; track check[0]) { <label><input type="checkbox" [formControlName]="check[0]" />{{ check[1] }}</label> }</div>
+    <p class="help-text">A base reúne empresas ativas com e-mail ou celular. O score prioriza oportunidades em serviços digitais.</p>
+  </aside>
+  <div class="companies-main">
+    <div class="table-toolbar"><div class="search-input"><ceara-icon name="search" [size]="18" /><input aria-label="Buscar empresas" placeholder="Buscar nome, empresa, cidade ou ramo…" [formControl]="term" /></div><button class="button filter-toggle" (click)="showFilters.set(!showFilters())" [attr.aria-expanded]="showFilters()"><ceara-icon name="sliders-horizontal" /> Filtros</button></div>
+    <div class="table-context"><span><strong>{{ number(data().total) }}</strong> empresas</span><label>Ordenar <select aria-label="Ordenar empresas" [formControl]="form.controls.ordem"><option value="score">Maior score</option><option value="nome">Nome</option><option value="cidade">Município</option><option value="recente">Mais recentes</option><option value="antiga">Mais antigas</option></select></label></div>
+    @if (filterLabel(store.filters()) !== 'Todo o Ceará') { <p class="active-filters">{{ filterLabel(store.filters()) }}</p> }
+    @if (error()) {
+      <div class="empty error" role="alert"><h2>Não foi possível buscar as empresas</h2><p>{{ error() }}</p><button class="button" (click)="retry()">Tentar novamente</button></div>
+    } @else if (loading()) {
+      <div class="table-skeleton" aria-label="Buscando empresas" role="status">@for (skeleton of skeletons; track skeleton) { <div class="skeleton"></div> }</div>
+    } @else {
+      <div class="table-scroll"><table class="data-table contacts-table"><thead><tr><th>Empresa</th><th>Município</th><th>Ramo</th><th>Contato</th><th class="numeric">Score</th><th><span class="sr-only">Detalhes</span></th></tr></thead><tbody>
+        @for (contact of data().itens; track contact.id) {
+          <tr><td><button class="company-name" (click)="detail.set(contact)">{{ contact.nome }}</button><span class="table-secondary">{{ contact.porte }} · {{ contact.abertura || 'Ano não informado' }}</span></td><td>{{ contact.cidade }}<span class="table-secondary">{{ contact.bairro }}</span></td><td><span class="segment-cell">{{ contact.segmento }}</span></td><td><div class="contact-icons">
+            @if (contact.whatsapp) { <a [href]="contact.whatsapp" title="Abrir WhatsApp" [attr.aria-label]="'WhatsApp de ' + contact.nome" target="_blank" rel="noopener noreferrer"><ceara-icon name="phone" /></a> }
+            @if (contact.email) { <a [href]="'mailto:' + contact.email" [title]="contact.email" [attr.aria-label]="'E-mail de ' + contact.nome"><ceara-icon name="mail" /></a> }
+          </div></td><td class="numeric"><span class="score" [attr.data-level]="contact.score >= 75 ? 'alto' : 'normal'">{{ contact.score }}</span></td><td><button class="icon-button" [attr.aria-label]="'Ver detalhes de ' + contact.nome" (click)="detail.set(contact)"><ceara-icon name="arrow-up-right" /></button></td></tr>
+        }
+      </tbody></table></div>
+      @if (!data().itens.length) { <div class="empty"><ceara-icon name="search" [size]="30" /><h2>Nenhuma empresa neste recorte</h2><p>Experimente outro município, ramo ou um score menor.</p></div> }
+      <div class="pagination"><span>{{ range() }}</span><div><button class="icon-button" [disabled]="page() === 1" aria-label="Página anterior" (click)="page.set(page() - 1)"><ceara-icon name="chevron-left" [size]="18" /></button><span>Página {{ page() }} de {{ number(totalPages()) }}</span><button class="icon-button" [disabled]="page() >= totalPages()" aria-label="Próxima página" (click)="page.set(page() + 1)"><ceara-icon name="chevron-right" [size]="18" /></button></div></div>
+    }
+  </div>
+  @if (detail(); as contact) { <ceara-contact-details [contact]="contact" (close)="detail.set(null)" /> }
+</section>
