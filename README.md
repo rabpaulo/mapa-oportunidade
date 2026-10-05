@@ -38,6 +38,25 @@ Sem base de origem, abra **Base**, marque **Baixar novo cadastro** e inicie a at
 
 Cada atualização ocorre em uma pasta temporária. O banco é validado antes de substituir atomicamente a versão anterior. Consultas continuam disponíveis durante o processamento. Uma falha na geração ou validação preserva a base anterior. Reiniciar o servidor interrompe o acompanhamento da tarefa; inicie novamente pela aba Base. Pastas temporárias deixadas por um encerramento forçado não são utilizadas como base.
 
+### Coleta igual ao Garimpo
+
+O coletor usa os módulos Python adaptados de `~/garimpo/src/receita.py` e `ingestar_receita.py`, com o recorte fixo em **CE**. Descobre a publicação mais recente no [espelho da Casa dos Dados](https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos/), baixa as tabelas de municípios/CNAEs e os dez ZIPs de Estabelecimentos. Filtra `UF=CE` e situação cadastral `02` (ativa), gravando o CSV compactado em fluxo. Depois percorre os dez ZIPs de Empresas e guarda as razões sociais e portes dos CNPJs básicos encontrados. Cada ZIP nacional é apagado após a leitura.
+
+O processamento aplica os critérios originais de nomes, e-mails, telefones, ramos e score, monta o SQLite e o índice FTS5, associa os municípios ao IBGE e prepara as malhas. A publicação só ocorre depois da validação.
+
+Na interface, use **Base → Baixar novo cadastro → Baixar e atualizar Ceará**. Pelo terminal, após preparar o ambiente Python, o mesmo fluxo pode ser executado sem iniciar o servidor web:
+
+```bash
+# Coleta completa e publicação segura da nova base CE
+.venv/bin/python scripts/coletar.py
+
+# Diretório alternativo ou regeneração dos recortes já baixados
+.venv/bin/python scripts/coletar.py --dados /caminho/para/dados
+.venv/bin/python scripts/coletar.py --reaproveitar
+```
+
+Os logs de download e processamento aparecem no terminal. O comando retorna código `0` quando conclui, `1` em caso de erro e `130` ao interromper com `Ctrl+C`, encerrando o processo de coleta e preservando a base anterior. Uma trava por diretório impede que o terminal e a interface publiquem duas atualizações simultâneas. Os módulos em `src/` continuam disponíveis para uso individual em um diretório de trabalho; `scripts/coletar.py` é a entrada recomendada para preservar a base anterior.
+
 ```text
 data/receita/       recorte CE e tabelas auxiliares
 data/uf/CE/        contatos.db e relatório da geração
@@ -91,7 +110,7 @@ O score e as sugestões por ramo preservam os critérios originais do Garimpo, v
 ## Desenvolvimento e validação
 
 ```bash
-# Testes de API, consultas, exportação, atualização e Gemini simulado
+# Testes de coleta CNPJ, API, consultas, exportação, atualização e Gemini simulado
 .venv/bin/python -m pytest -q
 
 # Compilação e tipos
@@ -104,7 +123,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Os testes do Gemini simulam respostas do provedor e erros para não consumir cotas. Uma chamada real exige sua chave local. Os testes de navegador utilizam a base preparada, sem iniciar downloads nacionais. A documentação da API fica em **http://localhost:8000/api/docs**.
+Os testes de coleta usam ZIPs pequenos no layout da Receita e respostas HTTP simuladas, exercitando o download, recorte CE, cruzamento de empresas e geração/publicação real do SQLite. Os testes do Gemini simulam respostas do provedor e erros para não consumir cotas. Uma chamada real exige sua chave local. Os testes de navegador utilizam a base preparada, sem iniciar downloads nacionais. A documentação da API fica em **http://localhost:8000/api/docs**.
 
 ## Licença e atribuição
 

@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Baixa o cadastro de CNPJ da Receita e guarda o recorte de uma ou mais UFs.
+"""Coleta o cadastro CNPJ pelo pipeline do Garimpo e guarda somente o Ceará.
 
 Uso:
-    python src/ingestar_receita.py --uf SC
-    python src/ingestar_receita.py --uf SC PR SP      # tres estados, um download
+    python src/ingestar_receita.py --uf CE --dados /pasta/temporaria
 
-Escreve data/receita/estabelecimentos_<uf>.csv.gz e empresas_<uf>.csv.gz.
+Escreve receita/estabelecimentos_ce.csv.gz e empresas_ce.csv.gz.
 
-Os arquivos da Receita sao nacionais, nao ha download por estado. Pedir um
-estado por vez baixaria e descomprimiria os mesmos 6,7 GB de novo a cada
-rodada: aqui cada bloco e lido uma vez e distribuido para todas as UFs
-pedidas. Tres estados custam o mesmo download que um.
+Os arquivos da Receita sao nacionais, nao ha download por estado. Cada ZIP
+e baixado, lido em blocos e apagado; somente estabelecimentos ativos do CE e
+as empresas correspondentes sao gravados. A coleta original do Garimpo foi
+preservada, com a CLI restrita a CE.
 
 As linhas sao gravadas conforme saem do parser: guardar os milhoes de
 estabelecimentos em memoria nao caberia na RAM.
+
+Para coletar e publicar o SQLite com seguranca, use scripts/coletar.py ou a
+aba Base. Este modulo de ingestao escreve diretamente no destino informado.
 """
 
 import argparse
@@ -185,10 +187,13 @@ def baixar_empresas(versao, basicos, ufs, blocos=10, log=print):
                         while True:
                             bloco = bruto.read(1 << 22)
                             if not bloco:
-                                break
-                            bloco = resto + bloco
-                            linhas = bloco.split(b"\n")
-                            resto = linhas.pop()
+                                if not resto:
+                                    break
+                                linhas, resto = [resto], b""
+                            else:
+                                bloco = resto + bloco
+                                linhas = bloco.split(b"\n")
+                                resto = linhas.pop()
                             for linha in linhas:
                                 # O CNPJ basico sao os 8 digitos logo apos a
                                 # primeira aspa: da para descartar a maioria
@@ -257,11 +262,11 @@ def registrar_versao(uf, versao, estabelecimentos, log=print):
 def main():
     ap = argparse.ArgumentParser(description="Ingestao dos Dados Abertos de CNPJ")
     ap.add_argument("--uf", nargs="+", default=["CE"], choices=["CE"],
-                    help="uma ou mais siglas; varias custam o mesmo download")
+                    help="recorte fixo do Ceara")
     ap.add_argument("--pular-empresas", action="store_true")
     ap.add_argument("--somente-empresas", action="store_true",
                     help="reaproveita o arquivo de estabelecimentos ja baixado")
-    ap.add_argument("--blocos", type=int, default=10,
+    ap.add_argument("--blocos", type=int, default=10, choices=range(1, 11),
                     help="quantos dos 10 blocos ler; menos serve para conferir")
     ap.add_argument("--dados", help="pasta de dados (padrao: data/ do projeto)")
     args = ap.parse_args()
