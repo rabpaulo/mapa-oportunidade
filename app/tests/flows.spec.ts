@@ -61,7 +61,7 @@ test('assistente aceita conversa geral, preserva a sessão e mostra análises', 
     const body = route.request().postDataJSON(); requests.push(body);
     await route.fulfill({ json: { texto: 'Podemos organizar uma pesquisa de mercado. Fortaleza tem 316.136 empresas nesta base.',
       resultados: [{ tipo: 'analise', titulo: 'Comparação', filtros: { cidade: '', cidades: [], segmento: '', segmentos: [], termo: '', porte: '', bairro: '', ano_minimo: null, ano_maximo: null, score_minimo: 0, somente_celular: false, somente_email: false, somente_sem_dominio: false, ordem: 'score' }, agrupar_por: ['cidade'], itens: [{ cidade: 'Fortaleza', contatos: 316136, com_celular: 0, com_email: 0, score_medio: 64 }] }],
-      fontes: [{ fonte: 'Receita Federal / Garimpo — recorte CE', versao: '2026-09-14', filtros: { cidade: '', cidades: [], segmento: '', segmentos: [], termo: '', porte: '', bairro: '', ano_minimo: null, ano_maximo: null, score_minimo: 0, somente_celular: false, somente_email: false, somente_sem_dominio: false, ordem: 'score' } }], modelo: 'gemini-simulado' } });
+      fontes: [{ fonte: 'Receita Federal — recorte CE', versao: '2026-09-14', filtros: { cidade: '', cidades: [], segmento: '', segmentos: [], termo: '', porte: '', bairro: '', ano_minimo: null, ano_maximo: null, score_minimo: 0, somente_celular: false, somente_email: false, somente_sem_dominio: false, ordem: 'score' } }], modelo: 'gemini-simulado' } });
   });
   await page.goto('/');
   await page.getByRole('navigation').getByRole('button', { name: 'Assistente', exact: true }).click();

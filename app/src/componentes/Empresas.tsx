@@ -26,7 +26,7 @@ export function ContactDetails({ contact: c, close }: { contact: Contact; close:
     <span className="score large">{c.score}<small>/100</small></span><h2>{c.nome}</h2><p className="muted">{c.empresa}</p><span className="tag">{c.segmento}</span>
     <dl className="detail-list">{[['CNPJ', c.cnpj], ['Município', c.cidade], ['Bairro', c.bairro], ['Endereço', c.endereco], ['Porte', c.porte], ['Ano de abertura', c.abertura], ['Telefone', c.telefone], ['E-mail', c.email]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || 'Não informado'}</dd></div>)}</dl>
     <div className="detail-actions">{c.whatsapp && <a className="button primary" href={c.whatsapp} target="_blank" rel="noopener noreferrer">Abrir WhatsApp <ArrowUpRight size={16} /></a>}{c.email && <a className="button" href={`mailto:${c.email}`}><Mail size={16} /> Enviar e-mail</a>}</div>
-    <div className="data-note"><strong>Critérios do Garimpo</strong><p>{c.oportunidade}</p><p>O score prioriza serviços digitais. Domínio próprio é inferido pelo e-mail e não comprova presença ou ausência de site.</p></div>
+    <div className="data-note"><strong>Critérios de priorização</strong><p>{c.oportunidade}</p><p>O score prioriza serviços digitais. Domínio próprio é inferido pelo e-mail e não comprova presença ou ausência de site.</p></div>
   </aside></div>;
 }
 
@@ -75,7 +75,7 @@ export default function Empresas({ filters, setFilters, areas, segments, refresh
       <label className="field"><span>Score mínimo <strong>{filters.score_minimo}</strong></span><input type="range" min="0" max="100" step="5" value={filters.score_minimo} onChange={e => change('score_minimo', Number(e.target.value))} /></label>
       <div className="year-fields"><label className="field"><span>Abertura desde</span><input type="number" min="1800" max="2200" placeholder="Ano" value={filters.ano_minimo ?? ''} onChange={e => change('ano_minimo', e.target.value ? Number(e.target.value) : null)} /></label><label className="field"><span>Até</span><input type="number" min="1800" max="2200" placeholder="Ano" value={filters.ano_maximo ?? ''} onChange={e => change('ano_maximo', e.target.value ? Number(e.target.value) : null)} /></label></div>
       <div className="filter-checks">{([['somente_celular', 'Com celular'], ['somente_email', 'Com e-mail'], ['somente_sem_dominio', 'E-mail sem domínio próprio']] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={filters[key]} onChange={e => change(key, e.target.checked)} />{label}</label>)}</div>
-      <p className="help-text">A base reúne empresas ativas com e-mail ou celular. O score segue os critérios originais do Garimpo.</p>
+      <p className="help-text">A base reúne empresas ativas com e-mail ou celular. O score prioriza oportunidades em serviços digitais.</p>
     </aside>
     <div className="companies-main">
       <div className="table-toolbar"><div className="search-input"><Search size={18} /><input aria-label="Buscar empresas" placeholder="Buscar nome, empresa, cidade ou ramo…" value={term} onChange={e => setTerm(e.target.value)} /></div><button className="button filter-toggle" onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters}><SlidersHorizontal size={16} /> Filtros</button><button className="button" onClick={exportNow} disabled={exporting || !data.total || loading}><ArrowDownToLine size={16} />{exporting ? 'Gerando Excel…' : selected.size ? `Exportar ${number(selected.size)}` : 'Exportar recorte'}</button></div>

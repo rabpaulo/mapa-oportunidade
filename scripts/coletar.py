@@ -1,4 +1,4 @@
-"""Coleta os Dados Abertos CNPJ pelo mesmo pipeline do Garimpo, somente CE."""
+"""Coleta os Dados Abertos CNPJ e publica a base do Ceará."""
 import argparse
 import os
 import sys

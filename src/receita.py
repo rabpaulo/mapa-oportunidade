@@ -24,7 +24,7 @@ import zipfile
 import requests
 
 ESPELHO = "https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos"
-UA = "prospeccao-vale-do-itajai/1.0 (levantamento comercial)"
+UA = "mapa-oportunidades-ceara/1.0"
 
 # Posicoes no layout de ESTABELECIMENTOS (30 campos).
 CNPJ_BASICO, CNPJ_ORDEM, CNPJ_DV = 0, 1, 2

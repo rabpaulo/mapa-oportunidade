@@ -50,6 +50,6 @@ export default function Home() {
         </> : screen === 'empresas' ? <Empresas filters={filters} setFilters={setFilters} areas={areas} segments={segments} refresh={base.gerado_em} /> : <Ramos segments={segments} openSegment={segmento => explore({ ...emptyFilters(), segmento })} />}
       </>}
     </main>
-    <footer className="site-footer"><span>Ceará, município por município.</span><span>Dados Receita Federal e IBGE <span className="footer-separator">/</span> Derivado do <a href="https://github.com/ivobraatz/garimpo" target="_blank" rel="noopener noreferrer">Garimpo</a> · AGPL-3.0</span></footer>
+    <footer className="site-footer"><span>Ceará, município por município.</span><span>Dados Receita Federal e IBGE <span className="footer-separator">/</span> <a href="https://github.com/rabpaulo/mapa-oportunidade" target="_blank" rel="noopener noreferrer">Código-fonte</a> · AGPL-3.0</span></footer>
   </div>;
 }

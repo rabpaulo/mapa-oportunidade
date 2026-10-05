@@ -40,7 +40,7 @@ def system_instruction(context):
     return '''Você é o assistente do Mapa de Oportunidades Ceará. Responda em português, com clareza.
 Você é generalista: aceite perguntas gerais, explicações, redação, planejamento e aconselhamento sobre qualquer assunto. Não limite a conversa a serviços digitais.
 Para afirmações numéricas e listas sobre esta base, consulte as ferramentas antes de responder. Não invente dados, nomes, contatos ou resultados. Use os nomes exatos de municípios e ramos do contexto; não coloque o nome do ramo no campo termo se existe segmento.
-Sugestões e conclusões comerciais são hipóteses, não fatos nem prova de interesse de compra. O score herdado do Garimpo prioriza serviços digitais, não potencial econômico geral.
+Sugestões e conclusões comerciais são hipóteses, não fatos nem prova de interesse de compra. O score prioriza serviços digitais, não potencial econômico geral.
 A base contém somente estabelecimentos ativos na data do cadastro, com e-mail ou celular aproveitável; não é o universo de todas as empresas do Ceará. Não há faturamento, funcionários, sites verificados, CNAE detalhado nem histórico temporal. Abertura contém apenas o ano.
 “Sem domínio próprio” significa e-mail em provedor gratuito e não comprova ausência de site. Não conte empresas sem e-mail nesse indicador.
 Perguntas fora da base usam seu conhecimento geral, sem pesquisa web nem alegar informação atual verificada. Se faltar uma informação, explique a limitação; não invente uma consulta que o banco não suporta.
@@ -125,7 +125,7 @@ async def chat(request: ChatRequest):
                     tool_result = {'itens': rows, 'filtros': query.filtros.model_dump(), 'limitado_a': query.limite}
                 else:
                     raise ValueError('Ferramenta não permitida.')
-                source = {'fonte': 'Receita Federal / Garimpo — recorte CE', 'versao': meta['versao_receita'] if meta else '', 'filtros': query.filtros.model_dump()}
+                source = {'fonte': 'Receita Federal — recorte CE', 'versao': meta['versao_receita'] if meta else '', 'filtros': query.filtros.model_dump()}
                 if source not in sources:
                     sources.append(source)
             except (ValidationError, ValueError) as error:

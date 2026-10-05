@@ -14,7 +14,7 @@ const ramps = {
   escuro: ['#3b302b', '#69412e', '#9c5c3b', '#b87851', '#d59668', '#e8b286'],
 };
 
-// Geometria e enquadramento adaptados do mapa original do Garimpo (AGPL-3.0).
+// Geometria e enquadramento adaptados de código © 2026 Ivo Braatz (AGPL-3.0-only).
 function bounds(geo: GeoJSON.FeatureCollection): maplibregl.LngLatBoundsLike {
   let west = 180, south = 90, east = -180, north = -90;
   const visit = (coords: unknown): void => {

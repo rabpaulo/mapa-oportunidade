@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Coleta o cadastro CNPJ pelo pipeline do Garimpo e guarda somente o Ceará.
+"""Coleta o cadastro CNPJ e guarda somente o Ceará.
 
 Uso:
     python src/ingestar_receita.py --uf CE --dados /pasta/temporaria
@@ -8,8 +8,7 @@ Escreve receita/estabelecimentos_ce.csv.gz e empresas_ce.csv.gz.
 
 Os arquivos da Receita sao nacionais, nao ha download por estado. Cada ZIP
 e baixado, lido em blocos e apagado; somente estabelecimentos ativos do CE e
-as empresas correspondentes sao gravados. A coleta original do Garimpo foi
-preservada, com a CLI restrita a CE.
+as empresas correspondentes sao gravados. A CLI e restrita a CE.
 
 As linhas sao gravadas conforme saem do parser: guardar os milhoes de
 estabelecimentos em memoria nao caberia na RAM.
@@ -57,7 +56,7 @@ COLUNAS = [
 
 def _tmpdir():
     base = os.environ.get("TEMP") or os.environ.get("TMP") or "."
-    caminho = os.path.join(base, "garimpo-cnpj")
+    caminho = os.path.join(base, "mapa-oportunidades-ceara-cnpj")
     os.makedirs(caminho, exist_ok=True)
     return caminho
 

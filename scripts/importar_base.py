@@ -1,4 +1,4 @@
-"""Copia o recorte CE do Garimpo sem modificar o banco de origem."""
+"""Importa uma base CE compatível sem modificar o banco de origem."""
 import argparse
 import json
 import shutil
@@ -45,7 +45,7 @@ def import_base(source: Path, target: Path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--origem', type=Path, default=Path.home() / 'garimpo')
+    parser.add_argument('--origem', type=Path, required=True, help='Diretório contendo data/uf/CE/contatos.db')
     parser.add_argument('--destino', type=Path, default=Path(__file__).resolve().parents[1] / 'data')
     args = parser.parse_args()
     import_base(args.origem.expanduser().resolve(), args.destino.expanduser().resolve())

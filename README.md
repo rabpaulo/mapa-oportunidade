@@ -2,7 +2,7 @@
 
 Aplicação web local para explorar empresas do Ceará, comparar municípios e ramos, exportar contatos e conversar com um assistente generalista integrado ao Google Gemini.
 
-Derivada do [Garimpo](https://github.com/ivobraatz/garimpo), de Ivo Braatz. Interface Next.js/React/TypeScript, API FastAPI/Python, banco SQLite com FTS5 e mapas MapLibre com malhas locais do IBGE. Nenhum componente depende de Tauri ou Rust.
+Interface Next.js/React/TypeScript, API FastAPI/Python, banco SQLite com FTS5 e mapas MapLibre com malhas locais do IBGE. Nenhum componente depende de Tauri ou Rust.
 
 ## Iniciar
 
@@ -26,21 +26,21 @@ Os serviços escutam somente em `127.0.0.1`. A interface encaminha `/api/*` para
 
 Este ambiente já possui uma cópia independente da base existente do Ceará: **680.298 contatos, 184 municípios e 147 ramos**, cadastro de **14/09/2026**. Os números mudam quando o cadastro é atualizado.
 
-Se o projeto for clonado em outra máquina e `~/garimpo/data/uf/CE/contatos.db` estiver disponível, o comando de inicialização importa a base automaticamente. Para importar de outro lugar:
+Para importar uma base CE compatível de outro diretório, informe explicitamente a pasta de origem, que deve conter `data/uf/CE/contatos.db`:
 
 ```bash
-.venv/bin/python scripts/importar_base.py --origem /caminho/para/garimpo
+.venv/bin/python scripts/importar_base.py --origem /caminho/para/base-origem
 ```
 
-A importação usa `sqlite3.Connection.backup`, aceita somente CE e não sobrescreve uma base existente. Copia também o recorte processado da Receita e as malhas em cache. Não compartilha o banco com o Garimpo original.
+A importação usa `sqlite3.Connection.backup`, aceita somente CE e não sobrescreve uma base existente. Copia também o recorte processado da Receita e as malhas em cache. O banco importado é independente da origem.
 
 Sem base de origem, abra **Base**, marque **Baixar novo cadastro** e inicie a atualização. O download original é nacional e pode consumir vários GB, embora apenas o recorte CE seja armazenado. Sem essa opção, o app regenera a base a partir dos arquivos locais.
 
 Cada atualização ocorre em uma pasta temporária. O banco é validado antes de substituir atomicamente a versão anterior. Consultas continuam disponíveis durante o processamento. Uma falha na geração ou validação preserva a base anterior. Reiniciar o servidor interrompe o acompanhamento da tarefa; inicie novamente pela aba Base. Pastas temporárias deixadas por um encerramento forçado não são utilizadas como base.
 
-### Coleta igual ao Garimpo
+### Coleta dos Dados Abertos CNPJ
 
-O coletor usa os módulos Python adaptados de `~/garimpo/src/receita.py` e `ingestar_receita.py`, com o recorte fixo em **CE**. Descobre a publicação mais recente no [espelho da Casa dos Dados](https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos/), baixa as tabelas de municípios/CNAEs e os dez ZIPs de Estabelecimentos. Filtra `UF=CE` e situação cadastral `02` (ativa), gravando o CSV compactado em fluxo. Depois percorre os dez ZIPs de Empresas e guarda as razões sociais e portes dos CNPJs básicos encontrados. Cada ZIP nacional é apagado após a leitura.
+O coletor usa os módulos Python `src/receita.py` e `src/ingestar_receita.py`, com o recorte fixo em **CE**. Descobre a publicação mais recente no [espelho da Casa dos Dados](https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos/), baixa as tabelas de municípios/CNAEs e os dez ZIPs de Estabelecimentos. Filtra `UF=CE` e situação cadastral `02` (ativa), gravando o CSV compactado em fluxo. Depois percorre os dez ZIPs de Empresas e guarda as razões sociais e portes dos CNPJs básicos encontrados. Cada ZIP nacional é apagado após a leitura.
 
 O processamento aplica os critérios originais de nomes, e-mails, telefones, ramos e score, monta o SQLite e o índice FTS5, associa os municípios ao IBGE e prepara as malhas. A publicação só ocorre depois da validação.
 
@@ -105,7 +105,7 @@ Consultas, fontes e mapas funcionam offline após instalar as dependências e pr
 
 A base reúne estabelecimentos ativos na data do cadastro **com e-mail ou celular aproveitável**, e não todas as empresas do Ceará. Dados cadastrais não comprovam operação atual ou intenção de compra.
 
-O score e as sugestões por ramo preservam os critérios originais do Garimpo, voltados a serviços digitais. **Sem domínio próprio** significa e-mail em provedor gratuito e não comprova ausência de site. **Abertura** contém somente o ano. Não há faturamento, número de funcionários ou histórico temporal na base de contatos. Os ramos são agrupamentos derivados de CNAEs.
+O score e as sugestões por ramo usam critérios de priorização voltados a serviços digitais. **Sem domínio próprio** significa e-mail em provedor gratuito e não comprova ausência de site. **Abertura** contém somente o ano. Não há faturamento, número de funcionários ou histórico temporal na base de contatos. Os ramos são agrupamentos derivados de CNAEs.
 
 ## Desenvolvimento e validação
 
@@ -127,6 +127,6 @@ Os testes de coleta usam ZIPs pequenos no layout da Receita e respostas HTTP sim
 
 ## Licença e atribuição
 
-**AGPL-3.0-only**, conforme [LICENSE](LICENSE). Os scripts de processamento, exportação e critérios comerciais foram adaptados do Garimpo, copyright © 2026 Ivo Braatz. O mapa reaproveita o cálculo geométrico do projeto original. As adaptações web e a integração Gemini estão nesta mesma licença.
+**AGPL-3.0-only**, conforme [LICENSE](LICENSE). Os componentes originais de processamento, exportação, critérios comerciais e cálculos geométricos são copyright © 2026 Ivo Braatz. As adaptações web e a integração Gemini estão nesta mesma licença. Os avisos de autoria e alterações estão em [NOTICE](NOTICE).
 
 Dados: Dados Abertos CNPJ da Receita Federal, pelo espelho da Casa dos Dados; códigos e malhas do IBGE. Ao usar a base para contato, considere que cadastros de MEIs podem conter canais pessoais.

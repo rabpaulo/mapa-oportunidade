@@ -15,7 +15,7 @@ import requests
 
 API = "https://servicodados.ibge.gov.br/api/v1/localidades"
 MALHAS = "https://servicodados.ibge.gov.br/api/v3/malhas"
-UA = "garimpo/1.0"
+UA = "mapa-oportunidades-ceara/1.0"
 
 # Qualidade da malha: 'minima' basta para colorir e mantem o arquivo leve.
 INTRARREGIAO = {"uf": "UF", "municipio": "municipio"}

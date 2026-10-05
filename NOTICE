@@ -1,0 +1,14 @@
+Mapa de Oportunidades Ceará
+
+Os componentes originais de processamento de dados, exportação, critérios
+comerciais e cálculos geométricos são copyright © 2026 Ivo Braatz.
+
+Adaptações de outubro de 2026: aplicação web local exclusiva para o Ceará,
+API HTTP, integração com o Google Gemini, publicação segura da base e nova
+identidade visual.
+
+Este trabalho é distribuído sob a GNU Affero General Public License,
+versão 3 (AGPL-3.0-only). A licença completa está no arquivo LICENSE.
+Este software é fornecido sem garantia, conforme os termos da licença.
+
+Código-fonte: https://github.com/rabpaulo/mapa-oportunidade

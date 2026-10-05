@@ -11,7 +11,4 @@ fi
 if [ ! -d app/node_modules/next ]; then
   (cd app && npm ci)
 fi
-if [ ! -f data/uf/CE/contatos.db ] && [ -f "$HOME/garimpo/data/uf/CE/contatos.db" ] && [ -z "${CEARA_DATA_DIR:-}" ]; then
-  .venv/bin/python scripts/importar_base.py
-fi
 exec .venv/bin/python scripts/dev.py "$@"
