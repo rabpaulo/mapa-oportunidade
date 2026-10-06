@@ -20,6 +20,8 @@ WORKDIR /src
 COPY scripts/fetch-snapshot.mjs ./
 COPY deployment/ ./deployment/
 RUN node fetch-snapshot.mjs deployment/snapshot.json /snapshot deployment/snapshot-input/snapshot.tar.br
+COPY . /source/
+RUN node /source/scripts/empacotar_codigo.mjs /source /codigo/codigo-fonte.tar.gz
 
 # SDK target used by the local development launcher.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS development
@@ -31,6 +33,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS production
 WORKDIR /app
 COPY --from=api /publish/ ./
 COPY --from=web /src/app/dist/ceara/browser/ ./wwwroot/
+COPY --from=snapshot /codigo/codigo-fonte.tar.gz ./wwwroot/codigo-fonte.tar.gz
 COPY --from=snapshot /snapshot/ /snapshot/
 ENV PORT=8080 CEARA_CONTAINER=1 DOTNET_EnableDiagnostics=0 ASPNETCORE_ENVIRONMENT=Production \
     CEARA_SNAPSHOT_ARCHIVE=/snapshot/snapshot.tar.br CEARA_SNAPSHOT_MANIFEST=/snapshot/snapshot.json CEARA_DATA_DIR=/tmp/ceara-data

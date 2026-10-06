@@ -16,13 +16,13 @@ public sealed class ApiTests
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
-    [Fact] public async Task SearchPreservesAccentsPrefixAndPrivacy()
+    [Fact] public async Task SearchPreservesAccentsPrefixAndAllColumns()
     {
         using var host = new TestHost(); using var client = host.CreateClient();
         var found = await Post(client, "contatos/buscar", new { filtros = new { termo = "sao jose" } });
         Assert.Equal(1, found.GetProperty("total").GetInt32());
         var row = found.GetProperty("itens")[0]; Assert.Equal("Padaria São José", row.GetProperty("nome").GetString());
-        Assert.False(row.TryGetProperty("busca", out _)); Assert.True(row.GetProperty("tem_celular").GetBoolean());
+        Assert.Contains("padaria sao jose", row.GetProperty("busca").GetString()); Assert.True(row.GetProperty("tem_celular").GetBoolean());
         found = await Post(client, "contatos/buscar", new { filtros = new { termo = "padar" } }); Assert.Equal(3, found.GetProperty("total").GetInt32());
         found = await Post(client, "contatos/buscar", new { filtros = new { termo = "*** OR \"'" } }); Assert.Equal(0, found.GetProperty("total").GetInt32());
     }

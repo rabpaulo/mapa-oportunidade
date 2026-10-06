@@ -8,7 +8,7 @@ namespace Ceara.Api;
 public sealed partial class Gemini(HttpClient http, Database database, IConfiguration config)
 {
     public const string DefaultModel = "gemini-3.5-flash-lite";
-    public bool Configured => !string.IsNullOrWhiteSpace(config["GEMINI_API_KEY"]);
+    public bool Configured => config["CEARA_PUBLIC"] != "1" && !string.IsNullOrWhiteSpace(config["GEMINI_API_KEY"]);
     public string Model => config["GEMINI_MODEL"]?.Trim() ?? DefaultModel;
     private static readonly string Prompt = Resource("Gemini.prompt.txt");
     private static readonly JsonNode Tools = JsonNode.Parse(Resource("Gemini.tools.json"))!;
@@ -24,6 +24,7 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
 
     private async Task<JsonObject> Generate(JsonObject payload, CancellationToken cancellation)
     {
+        GeminiPrivacy.EnsureSafePayload(payload);
         using var request = new HttpRequestMessage(HttpMethod.Post,
             $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent");
         request.Headers.Add("x-goog-api-key", config["GEMINI_API_KEY"]!.Trim());
@@ -61,6 +62,9 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
     public async Task<JsonObject> Chat(ChatRequest request, CancellationToken cancellation)
     {
         request.Validate();
+        if (config["CEARA_PUBLIC"] == "1")
+            throw new ApiError("O chat não está disponível na publicação pública. Consulte empresas, municípios e ramos pelos filtros.", 403);
+        GeminiPrivacy.EnsureSafeRequest(request);
         if (!Configured) throw new ApiError("Configure GEMINI_API_KEY no servidor para usar o assistente.");
         if (!ModelId().IsMatch(Model)) throw new ApiError("GEMINI_MODEL possui um identificador inválido.");
         JsonNode context = new JsonObject { ["disponivel"] = false };
@@ -119,8 +123,12 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
                         filters = query.Filtros;
                         var found = database.Search(new() { Filtros = filters, PorPagina = query.Limite }, cancellation);
                         results.Add(Node(new { tipo = "empresas", titulo = "Empresas encontradas", filtros = filters, total = found.Total, itens = found.Itens }));
-                        toolResult = Node(new { total = found.Total, exibidas = found.Itens.Count, filtros = filters,
-                            nota = "Os contatos detalhados serão exibidos em uma tabela local, sem envio ao Gemini." })!;
+                        // Free-text filters stay in the local UI. Small result sets
+                        // do not send exact counts back to the provider.
+                        var small = found.Total is > 0 and < 5;
+                        toolResult = Node(new { total = small ? (long?)null : found.Total,
+                            exibidas = small ? (int?)null : found.Itens.Count,
+                            nota = "Os contatos e filtros detalhados serão exibidos na aplicação. Contagens de recortes com menos de cinco empresas são omitidas do envio ao Gemini." })!;
                     }
                     else if (name == "analisar_base")
                     {
@@ -128,7 +136,8 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
                         filters = query.Filtros;
                         var rows = database.Analyze(query, cancellation);
                         results.Add(Node(new { tipo = "analise", titulo = "Análise da base", itens = rows, filtros = filters, agrupar_por = query.AgruparPor }));
-                        toolResult = Node(new { itens = rows, filtros = filters, limitado_a = query.Limite })!;
+                        toolResult = Node(new { itens = rows.Where(row => Convert.ToInt64(row["contatos"]) >= 5), limitado_a = query.Limite,
+                            nota = "Grupos com menos de cinco empresas são omitidos do envio ao Gemini. A análise completa e os filtros aparecem na aplicação." })!;
                     }
                     else throw new ApiError("Ferramenta não permitida.", 422);
                     var source = Node(new { fonte = "Receita Federal — recorte CE", versao = metadata?["versao_receita"] ?? "", filtros = filters })!;

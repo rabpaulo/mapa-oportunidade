@@ -3,7 +3,7 @@
     "functionDeclarations": [
       {
         "name": "buscar_empresas",
-        "description": "Encontra empresas da base CE e exibe uma tabela local com identificação e contatos. A IA recebe somente total, filtros e quantidade exibida.",
+        "description": "Encontra empresas da base CE e exibe uma tabela local com identificação, contatos e filtros. O retorno para a IA contém apenas total e quantidade exibida; recortes com uma a quatro empresas omitem essas contagens.",
         "parameters": {
           "type": "OBJECT",
           "properties": {
@@ -76,7 +76,7 @@
       },
       {
         "name": "analisar_base",
-        "description": "Calcula contagens, médias de score, contatos por canal e percentuais. Agrupa por até duas dimensões; sem agrupamento calcula o total filtrado. Cada empresa só é contada uma vez.",
+        "description": "Calcula contagens, médias de score, contatos por canal e percentuais. Agrupa por até duas dimensões; sem agrupamento calcula o total filtrado. Cada empresa só é contada uma vez. O retorno para a IA omite grupos com menos de cinco empresas; a análise completa e os filtros aparecem na aplicação.",
         "parameters": {
           "type": "OBJECT",
           "properties": {

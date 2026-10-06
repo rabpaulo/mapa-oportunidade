@@ -151,6 +151,29 @@ test('erro de quota da IA é claro e empresas continuam disponíveis', async ({ 
   await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
 });
 
+test('pergunta bloqueada mostra o motivo e não contamina o histórico', async ({ page }) => {
+  const requests: { pergunta: string; historico: unknown[] }[] = [];
+  await page.route('**/api/chat', async route => {
+    const body = route.request().postDataJSON(); requests.push(body);
+    if (body.pergunta.includes('@')) {
+      await route.fulfill({ status: 422, json: { detail: 'O filtro de privacidade bloqueou a pergunta ou o histórico. Remova dados pessoais.' } });
+    } else {
+      await route.fulfill({ json: { texto: 'Vamos comparar os municípios.', resultados: [], fontes: [], modelo: 'gemini-simulado' } });
+    }
+  });
+  await page.goto('/');
+  await page.getByRole('navigation').getByRole('button', { name: 'Assistente', exact: true }).click();
+  await page.getByLabel('Sua pergunta').fill('Meu e-mail é pessoa@example.invalid');
+  await page.getByRole('button', { name: 'Enviar pergunta', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('filtro de privacidade');
+  await expect(page.getByLabel('Sua pergunta')).toHaveValue('Meu e-mail é pessoa@example.invalid');
+  await expect(page.locator('.chat-message.user')).toHaveCount(0);
+  await page.getByLabel('Sua pergunta').fill('Compare Fortaleza e Sobral');
+  await page.getByRole('button', { name: 'Enviar pergunta', exact: true }).click();
+  await expect(page.locator('.chat-message.model')).toContainText('comparar os municípios');
+  expect(requests[1].historico).toEqual([]);
+});
+
 test('layout móvel, filtros recolhidos e captura das telas', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.map-canvas canvas')).toBeVisible();

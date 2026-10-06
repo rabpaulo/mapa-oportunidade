@@ -1,69 +1,106 @@
 # Mapa de Oportunidades Ceará
 
-Aplicação pública em português para explorar empresas do Ceará, comparar municípios e ramos e conversar com um assistente integrado ao Gemini. Frontend **Angular 22**, API **ASP.NET Core / .NET 10 LTS** e SQLite com FTS5. A coleta e a preparação continuam em Python, executadas somente localmente.
+Aplicação em português para explorar empresas do Ceará e comparar municípios e ramos. Frontend **Angular 22**, API **ASP.NET Core / .NET 10 LTS** e SQLite com FTS5. A coleta e a preparação da base são executadas localmente em Python.
 
-A interface mantém os temas claro/escuro, o mapa MapLibre com malhas locais e fallback sem tiles externos, filtros combinados, paginação, detalhes de empresas e histórico de conversa durante a sessão. A aba Base apresenta a origem e a versão dos dados. Exportações e atualização pelo navegador foram removidas.
+Site: [mapa-oportunidade-ceara.vercel.app](https://mapa-oportunidade-ceara.vercel.app). Código: [rabpaulo/mapa-oportunidade](https://github.com/rabpaulo/mapa-oportunidade).
 
-## Desenvolvimento
+A publicação usa a **base local integral: 680.298 registros e todas as 19 colunas**, incluindo contatos e endereços, sem exclusões na preparação do snapshot. O cadastro atual é de 14/09/2026, gerado em 04/10/2026. O banco original é preservado e uma cópia consistente é incorporada à imagem da aplicação. Consultas no site usam essa cópia local no servidor, sem buscar empresas em serviços externos.
 
-Requisitos: Node.js 26 (ou uma versão compatível com Angular 22), npm e Docker com daemon ativo. A API de desenvolvimento roda em Docker; o Angular usa proxy para `/api`.
+**Fonte pública:** Dados Abertos CNPJ da Receita Federal, obtidos pelo espelho Casa dos Dados. Malhas e códigos municipais: IBGE. Informações podem estar desatualizadas. O score é calculado pela aplicação; não é uma avaliação da Receita Federal. A base pode conter dados pessoais associados ao cadastro empresarial; sua origem pública não autoriza automaticamente qualquer reutilização ou prospecção.
+
+## Executar localmente
+
+Requisitos: Git, Node.js 26, npm, Python 3 com suporte a `venv` e Docker com daemon ativo. Como alternativa ao Docker, instale o SDK .NET 10.
 
 ```bash
+git clone https://github.com/rabpaulo/mapa-oportunidade.git
+cd mapa-oportunidade
+./scripts/preparar_python.sh
+.venv/bin/python scripts/coletar.py
+cp .env.example .env
 ./iniciar.sh
 ```
 
-Abra `http://localhost:3000`. Ctrl+C encerra ambos os serviços. Com o SDK .NET 10 instalado, é possível usar `./iniciar.sh --nativo`. Os dados vêm de `data/` ou de `CEARA_DATA_DIR` no ambiente/arquivo `.env`.
+Abra **http://localhost:3000**. Ctrl+C encerra os serviços. O launcher instala as dependências Angular se necessário e mantém a API em Docker. Com .NET 10 instalado, use `./iniciar.sh --nativo`.
 
-Para o assistente, copie `.env.example` para `.env` e configure `GEMINI_API_KEY` e, opcionalmente, `GEMINI_MODEL`. A chave fica exclusivamente na API; nunca é incorporada aos assets Angular nem à imagem de produção. No deploy, use variáveis de ambiente do servidor.
+**O clone contém o código, não o banco nem chaves.** O coletor baixa a fonte pública e prepara os dados somente no seu computador. O download nacional pode consumir vários GB e demorar; o recorte preservado é o Ceará. O coletor usa trava entre processos, valida a geração e publica atomicamente. Novas coletas podem resultar em totais e versões diferentes da publicação atual.
 
-O Gemini recebe perguntas, histórico textual, metadados, categorias e agregados. Resultados de ferramentas com identificação e contatos de empresas são enviados diretamente para a interface; esses registros não entram na resposta da ferramenta enviada ao modelo. Perguntas gerais usam o conhecimento do modelo, sem pesquisa na internet. O limite local é de cinco chamadas ao chat por IP por minuto; a aplicação apresenta erros de limite e de cota do provedor.
-
-## Coleta local
+Para reprocessar os arquivos já coletados ou importar uma base CE compatível sem sobrescrever dados existentes:
 
 ```bash
-./scripts/preparar_python.sh
-.venv/bin/python scripts/coletar.py
-# Reprocessar os arquivos já coletados:
 .venv/bin/python scripts/coletar.py --reaproveitar
-# Importar uma base CE compatível sem sobrescrever dados existentes:
 .venv/bin/python scripts/importar_base.py --origem /caminho/para/base
 ```
 
-A Receita distribui arquivos nacionais, cujo download pode consumir vários GB. Apenas o Ceará é preservado. A coleta usa uma trava entre processos, prepara uma geração temporária, valida o SQLite e os códigos IBGE e publica atomicamente. Leitores da geração anterior continuam com seu snapshot até encerrar a consulta. Python e arquivos de origem não fazem parte do runtime hospedado.
+Os dados vêm de `data/` ou de `CEARA_DATA_DIR` configurado no ambiente/arquivo `.env`. A aplicação local escuta no endereço de loopback. Executar localmente não dispensa obrigações aplicáveis ao uso dos dados.
 
-## Release e container
+## Assistente Gemini
 
-Por enquanto, o projeto usa **snapshot local, sem Vercel Blob**. O banco não entra no Git. O release usa a API de backup do SQLite, verifica integridade/FTS/municípios, inclui as duas malhas GeoJSON e gera um arquivo Brotli reproduzível com SHA-256 do arquivo e de cada item.
+O assistente continua disponível **somente na execução local**. Configure `GEMINI_API_KEY` e, opcionalmente, `GEMINI_MODEL` em `.env`. A chave fica exclusivamente na API; não entra nos assets Angular, no Git ou na imagem publicada.
+
+O Gemini recebe perguntas, histórico, categorias e agregados. Os registros individuais retornados pelas ferramentas aparecem diretamente na interface e não são enviados ao modelo. O filtro local bloqueia padrões comuns de documentos, e-mails, telefones, endereços e nomes rotulados, inclusive antes de cada chamada ao provedor. Pequenos grupos também são omitidos das respostas das ferramentas enviadas ao modelo.
+
+Essas medidas não garantem anonimização: texto livre pode conter informações pessoais não reconhecidas pelo filtro. Não envie dados pessoais ou confidenciais. O chat público responde HTTP 403 mesmo que uma chave exista no ambiente da Vercel.
+
+## Perfis de dados e hospedagem
+
+`CEARA_PUBLIC=1` ativa proteções de hospedagem: limites por IP e instância, política de conteúdo, mapa somente com malhas locais e bloqueio do chat. A configuração dos dados é independente:
+
+| `CEARA_DATA_PROFILE` | Comportamento |
+| --- | --- |
+| `integral` | Consulta o snapshot original e devolve todas as 19 colunas. É o perfil publicado na Vercel. |
+| `minimizado` | Exige a base derivada, sem contatos e endereços, e usa a lista de campos permitidos. |
+| Não configurado | Mantém compatibilidade: minimizado em hospedagem pública, integral localmente. |
+
+A interface mantém temas claro/escuro, filtros, paginação, detalhes e botões de contato. O indicador de domínio próprio deriva do e-mail e não comprova presença ou ausência de site. A base não possui URLs de sites confirmados. Não há cadastro, analytics ou exportação pelo navegador.
+
+Configure `PUBLIC_RESPONSAVEL` e `PUBLIC_PRIVACY_EMAIL` com identificação real e contato público monitorado. Esses dados ainda estão pendentes na publicação; não se afirma conformidade completa com a LGPD. Veja [operação e privacidade](docs/operacao-privacidade.md) e [pesquisa jurídica](docs/lgpd-fontes-oficiais.md).
+
+## Preparar release e publicar
+
+O banco e os arquivos de origem ficam fora do Git. O release usa backup SQLite, valida integridade, FTS e municípios, inclui as duas malhas GeoJSON e gera um arquivo Brotli com checksums SHA-256.
 
 ```bash
-.venv/bin/python scripts/preparar_release.py --saida releases/ce-nova-versao --fixar
-./iniciar.sh --producao
-# Alternativa com .NET instalado:
-./iniciar.sh --nativo --producao
+# Snapshot integral da base existente, sem passar pelo minimizador:
+.venv/bin/python scripts/preparar_release.py --dados data --saida releases/ce-NOVA-VERSAO --fixar
 ```
 
-`--fixar` grava apenas versão, URL opcional e checksums em `deployment/snapshot.json`, e copia o arquivo comprimido para `deployment/snapshot-input/snapshot.tar.br` (ignorado pelo Git). Escolha um diretório de release novo a cada execução; versões existentes não são sobrescritas.
-
-O Dockerfile compila Angular e C# em estágios separados. A imagem final contém ASP.NET Core, assets e snapshot comprimido, sem Node, Python, SDK ou chave Gemini. No primeiro startup, a API confere os checksums, extrai somente os três arquivos permitidos em `/tmp/ceara-data`, valida banco, versão e malhas e só então inicia o servidor. A pasta fica fora de `wwwroot`; conexões SQLite são somente leitura. Reinícios no mesmo container reutilizam a geração já validada.
+Escolha um diretório novo a cada release. `--fixar` grava versão e checksums em `deployment/snapshot.json` e copia o arquivo comprimido para `deployment/snapshot-input/snapshot.tar.br`, ignorado pelo Git. O banco original não é modificado.
 
 ```bash
+# Conferir o snapshot em produção local:
+CEARA_PUBLIC=1 CEARA_DATA_PROFILE=integral ./iniciar.sh --nativo --producao
+# Ou com Docker:
 docker build -f Dockerfile.vercel -t ceara:local .
-docker run --rm -p 127.0.0.1:8080:8080 -e GEMINI_API_KEY -e GEMINI_MODEL ceara:local
+docker run --rm -p 127.0.0.1:8080:8080 -e CEARA_PUBLIC=1 -e CEARA_DATA_PROFILE=integral ceara:local
 ```
 
-Com Docker direto, as variáveis Gemini são lidas do ambiente do shell. O launcher também lê `.env` e encaminha os valores ao processo do servidor. `CEARA_DATA_DIR` local define somente a montagem de desenvolvimento; a produção restaura o snapshot na pasta privada da imagem.
+O startup valida hashes, extrai somente os três arquivos permitidos, confere banco e malhas e inicia o servidor. A pasta dos dados fica fora de `wwwroot`; SQLite é somente leitura. A imagem final contém ASP.NET Core, assets, snapshot e código correspondente, sem SDK, Node, Python ou chaves.
 
-A versão completa atual tem 680.298 empresas, 184 municípios e 147 ramos. O cadastro é de 14/09/2026; os dados foram gerados em 04/10/2026. O snapshot local fica fixado pelo manifesto; futuras coletas devem produzir um novo release e uma nova imagem.
+### Vercel
 
-## Vercel
+`vercel.json` usa serviço em container, mesma origem para Angular e `/api`, porta 8080, região `gru1`, `CEARA_PUBLIC=1` e `CEARA_DATA_PROFILE=integral`. Essa região não garante que todos os tratamentos da hospedagem ocorram no Brasil.
 
-`vercel.json` configura um serviço `container` e encaminha todos os caminhos ao ASP.NET Core, que serve Angular e `/api` no mesmo domínio. O `PORT` deve ser **8080**, também nas configurações do projeto. Containers e Services utilizam recursos beta. Consulte o [guia ASP.NET Core da Vercel](https://vercel.com/kb/guide/dot-net-asp-net-on-vercel-with-docker).
+**O deploy é manual**, pois o snapshot não acompanha o Git. Deploys automáticos por push estão desativados para evitar builds sem o banco. Após preparar e fixar o release:
 
-Nenhum projeto Vercel foi criado ou publicado nesta migração. Sem armazenamento remoto, builds a partir somente do Git não têm o snapshot: prepare-o localmente antes de enviar o contexto ou publicar uma imagem pré-construída. `.vercelignore` preserva o arquivo preparado e exclui dados originais, dependências, caches e segredos. A compressão Brotli mantém o contexto abaixo do limite de upload de 100 MB do plano Hobby. Verifique o tamanho após cada novo release; a base pode crescer. Veja os [limites da Vercel](https://vercel.com/docs/limits). Uma URL HTTPS imutável pode ser fixada no manifesto posteriormente; o build baixa o snapshot e verifica seu checksum, sem depender de Blob.
+```bash
+npx vercel deploy
+# Após conferir a prévia:
+npx vercel promote URL_DO_DEPLOYMENT
+```
 
-Antes de produção, crie um preview e verifique startup a frio, consumo de memória/disco, `/`, `/api/saude`, buscas, malhas e mesma origem no domínio do preview. Configure `GEMINI_API_KEY` somente no servidor e uma regra de Firewall: caminho igual a `/api/chat`, método POST, janela fixa de 60 segundos, cinco solicitações, chave IP, ação 429. Essa regra precisa ser aplicada ao projeto Vercel; o limitador da API protege cada instância e não substitui o limite no edge. Os contadores WAF são regionais, conforme a [documentação de rate limiting](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting).
+A prévia precisa das mesmas variáveis de hospedagem e perfil integral. Confira `/api/saude`, `/api/base`, busca, detalhes, mapa, aviso de origem e links do código antes da promoção. O contexto de upload inclui o snapshot fixado; dados originais, releases, caches, dependências e segredos continuam excluídos.
 
-Atualize dados com coleta local → release → nova imagem → preview → publicação. Rollback restaura o deployment anterior com seu snapshot incorporado; mantenha os releases antigos para reconstrução. Não substitua um arquivo remoto já referenciado por um manifesto publicado.
+Cada deployment oferece o código correspondente em `/codigo-fonte.tar.gz`, sem banco ou segredos. O rodapé também aponta para o GitHub público e as instruções locais.
+
+### Perfil minimizado opcional
+
+```bash
+.venv/bin/python scripts/preparar_base_publica.py --saida artifacts/publica-NOVA-VERSAO
+.venv/bin/python scripts/preparar_release.py --dados artifacts/publica-NOVA-VERSAO --saida releases/publica-NOVA-VERSAO --fixar
+```
+
+Esse perfil requer `CEARA_DATA_PROFILE=minimizado`. O minimizador e suas regras continuam disponíveis como opção; não são usados pelo snapshot integral publicado.
 
 ## Verificação
 
@@ -75,18 +112,16 @@ npm ci
 npm run typecheck
 npm run build
 npx playwright install chromium
-# Com a aplicação em execução:
-npm run test:e2e
+# Com a aplicação local em execução:
+npm run test:e2e -- flows.spec.ts
+# Contra a publicação integral:
+CEARA_BASE_URL=https://mapa-oportunidade-ceara.vercel.app npm run test:e2e -- public.spec.ts
 ```
 
-A API preserva os contratos portugueses de saúde, base, busca, detalhes, facetas, municípios, ramos, análises, malhas e chat. SQL é parametrizado; dimensões, métricas e ordenação usam listas permitidas. Consultas têm orçamento de 15 segundos e chamadas Gemini têm timeout de 45 segundos por rodada, com até cinco rodadas. A especificação fica em `/api/openapi.json`.
-
-Os testes .NET cobrem busca com acentos/prefixos, filtros combinados, paginação, ordenação, agregados, facetas, validação, bancos ausentes/inválidos, origem, privacidade das ferramentas Gemini, erros do provedor, cotas, timeout e validação do snapshot. Os testes Python preservam coleta/importação, travas e publicação atômica e verificam os releases. Playwright cobre mapas, fallback offline, empresas, detalhes, ramos, chat, temas, layout móvel e ausência de controles de exportação/atualização.
-
-Os resultados da migração, medidas do container e limitações de implantação estão em [Verificação da migração](docs/migration-verification.md).
+Os testes cobrem consultas, agregados, snapshot, transporte Gemini, perfil integral e compatibilidade com o minimizado. Playwright verifica detalhes completos, mapa local, avisos, código e layout móvel. A API documenta os contratos portugueses em `/api/openapi.json`.
 
 ## Fontes e licença
 
-Dados Abertos CNPJ da Receita Federal; geometrias e códigos de municípios do IBGE; tiles externos do OpenFreeMap/OpenStreetMap, com fallback para as malhas locais. A base reúne estabelecimentos ativos na data do cadastro, com e-mail ou celular aproveitável. “Sem domínio próprio” deriva do e-mail e não comprova ausência de site; score é uma priorização para serviços digitais.
+Dados Abertos CNPJ da Receita Federal pelo espelho Casa dos Dados; geometrias e códigos municipais do IBGE. A base local inclui estabelecimentos com contato e não é um censo de todas as empresas do Ceará.
 
 **AGPL-3.0-only**, conforme [LICENSE](LICENSE). Os componentes originais de processamento, critérios comerciais e cálculos geométricos são copyright © 2026 Ivo Braatz. Consulte [NOTICE](NOTICE).

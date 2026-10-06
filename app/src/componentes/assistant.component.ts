@@ -41,11 +41,12 @@ export class AssistantComponent {
     const text = value.trim();
     if (!text || this.loading()) return;
     const history = this.store.turns().slice(-12).map(t => ({ role: t.role, text: t.text.slice(0, 6000) }));
-    this.store.turns.update(turns => [...turns, { role: 'user', text }]);
+    const pendingTurn = { role: 'user' as const, text };
+    this.store.turns.update(turns => [...turns, pendingTurn]);
     this.question.setValue(''); this.loading.set(true); this.error.set('');
     this.api.request<ChatResponse>('chat', { pergunta: text, historico: history }).pipe(this.untilDestroyed).subscribe({
       next: response => { this.store.turns.update(turns => [...turns, { role: 'model', text: response.texto, response }]); this.finish(); },
-      error: error => { this.error.set(error.message); this.question.setValue(text); this.finish(); }
+      error: error => { this.store.turns.update(turns => turns.filter(turn => turn !== pendingTurn)); this.error.set(error.message); this.question.setValue(text); this.finish(); }
     });
   }
   private finish() { this.loading.set(false); this.textarea()?.nativeElement.focus(); }

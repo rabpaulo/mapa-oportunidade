@@ -59,11 +59,14 @@ export class MapComponent implements AfterViewInit {
   readonly basemapStatus = signal<'carregando' | 'online' | 'local'>('carregando');
   readonly number = number;
   readonly percent = percent;
-  readonly metrics: { id: MapMetric; label: string }[] = [{ id: 'contatos', label: 'Total de empresas' }, { id: 'com_celular', label: 'Com celular' }, { id: 'sem_dominio', label: 'E-mail sem domínio próprio' }, { id: 'score_medio', label: 'Score médio' }];
+  readonly metrics = computed<{ id: MapMetric; label: string }[]>(() => this.base().publicacao_restrita
+    ? [{ id: 'contatos', label: 'Total de empresas' }, { id: 'score_medio', label: 'Score médio' }]
+    : [{ id: 'contatos', label: 'Total de empresas' }, { id: 'com_celular', label: 'Com celular' }, { id: 'sem_dominio', label: 'E-mail sem domínio próprio' }, { id: 'score_medio', label: 'Score médio' }]);
   readonly ramp = computed(() => mapRamps[this.theme()]);
-  readonly metricLabel = computed(() => this.metrics.find(m => m.id === this.metric())?.label);
+  readonly metricLabel = computed(() => this.metrics().find(m => m.id === this.metric())?.label);
   readonly ranked = computed(() => this.areas().filter(a => a.nome.toLocaleLowerCase('pt-BR').includes(this.search().toLocaleLowerCase('pt-BR'))).sort((a, b) => b[this.metric()] - a[this.metric()]));
   constructor() {
+    effect(() => { if (this.base().hospedagem_publica) this.basemapMode.set('offline'); });
     this.metricControl.valueChanges.pipe(takeUntilDestroyed()).subscribe(v => this.metric.set(v));
     this.searchControl.valueChanges.pipe(takeUntilDestroyed()).subscribe(v => this.search.set(v));
     effect(onCleanup => {
@@ -132,7 +135,7 @@ export class MapComponent implements AfterViewInit {
       const [ce, brasil] = geometries;
       const localStyle = () => mapStyle(theme, brasil, cityData(ce, areas, untracked(this.metric)));
       this.basemapStatus.set(mode === 'offline' ? 'local' : 'carregando'); m.setStyle(localStyle());
-      if (mode === 'offline') return;
+      if (mode === 'offline' || this.base().hospedagem_publica) return;
       const timeout = setTimeout(() => controller.abort(), 8000);
       fetch(basemapUrls[theme], { signal: controller.signal }).then(async response => {
         if (!response.ok) throw new Error('Mapa de ruas indisponível');

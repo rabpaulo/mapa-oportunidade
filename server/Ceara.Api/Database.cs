@@ -9,6 +9,7 @@ public sealed partial class Database(IConfiguration config)
 {
     public string DataDirectory => Path.GetFullPath(config["CEARA_DATA_DIR"] ?? "data");
     public string PathName => Path.Combine(DataDirectory, "uf", "CE", "contatos.db");
+    public bool Restricted => PublicationProfile.Get(config) == PublicationProfile.Minimized;
     public const string QueryFailure = "Não foi possível concluir a consulta à base. Tente um recorte menor ou verifique os dados.";
     public static readonly IReadOnlyDictionary<string, string> Orders = new Dictionary<string, string>
     {
@@ -61,6 +62,10 @@ public sealed partial class Database(IConfiguration config)
             Execute(session.Connection, "PRAGMA query_only=ON");
             if (Scalar(session.Connection, "SELECT valor FROM meta WHERE chave='uf'")?.ToString() != "CE")
                 throw new DatabaseUnavailable("O banco configurado não é uma base do Ceará.");
+            if (Restricted && Scalar(session.Connection, "SELECT valor FROM meta WHERE chave='publicacao_restrita'")?.ToString() != "1")
+                throw new DatabaseUnavailable("A publicação exige uma base minimizada. O cadastro original não pode ser hospedado neste modo.");
+            if (config["CEARA_PUBLIC"] == "1" && !Restricted && Scalar(session.Connection, "SELECT valor FROM meta WHERE chave='publicacao_restrita'")?.ToString() == "1")
+                throw new DatabaseUnavailable("O perfil integral exige o snapshot da base original, sem minimização.");
             return session;
         }
         catch { session.Dispose(); throw; }
@@ -136,9 +141,13 @@ public sealed partial class Database(IConfiguration config)
         return (source, clauses.Count == 0 ? "1=1" : string.Join(" AND ", clauses), parameters);
     }
 
-    private static Dictionary<string, object?> Contact(Dictionary<string, object?> row)
+    private Dictionary<string, object?> Contact(Dictionary<string, object?> row)
     {
-        row.Remove("busca");
+        if (Restricted)
+        {
+            var permitted = new[] { "id", "cnpj", "nome", "empresa", "cidade", "segmento", "oportunidade", "porte", "abertura", "score" };
+            return row.Where(pair => permitted.Contains(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+        }
         foreach (var name in new[] { "dominio_proprio", "tem_celular" }) row[name] = Convert.ToInt64(row[name] ?? 0) != 0;
         return row;
     }
@@ -179,6 +188,8 @@ public sealed partial class Database(IConfiguration config)
     public List<Dictionary<string, object?>> Analyze(AnalysisRequest request, CancellationToken cancellation = default)
     {
         request.Validate();
+        if (Restricted && (request.Filtros.Bairro.Length > 0 || request.AgruparPor.Contains("bairro")))
+            throw new ApiError("A versão pública não permite recortes por bairro.", 422);
         using var session = Open(cancellation);
         var (source, condition, parameters) = Where(session.Connection, request.Filtros);
         var columns = string.Join(", ", request.AgruparPor.Distinct().Select(g => "c." + g));
@@ -220,5 +231,8 @@ public sealed partial class Database(IConfiguration config)
         if (Convert.ToInt64(Scalar(connection, "SELECT COUNT(*) FROM municipios WHERE uf <> 'CE' OR codigo_ibge IS NULL OR codigo_ibge='' OR codigo_ibge NOT LIKE '23%'")) > 0)
             throw new DatabaseUnavailable("A nova base possui municípios sem correspondência com o Ceará.");
         Rows(connection, "SELECT rowid FROM contatos_fts WHERE contatos_fts MATCH 'fortaleza*' LIMIT 1");
+        if (Restricted && Convert.ToInt64(Scalar(connection,
+            "SELECT COUNT(*) FROM contatos WHERE COALESCE(email,'')<>'' OR COALESCE(telefone,'')<>'' OR COALESCE(whatsapp,'')<>'' OR COALESCE(endereco,'')<>'' OR COALESCE(bairro,'')<>''")) > 0)
+            throw new DatabaseUnavailable("A base pública contém campos privados. Gere uma nova versão minimizada.");
     }
 }

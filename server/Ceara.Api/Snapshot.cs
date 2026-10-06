@@ -55,7 +55,11 @@ public static class Snapshot
                 if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.GroupRead);
             }
             if (!seen.SetEquals(RequiredFiles)) throw new InvalidDataException("O snapshot está incompleto.");
-            var stagingConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["CEARA_DATA_DIR"] = staging }).Build();
+            var stagingConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["CEARA_DATA_DIR"] = staging, ["CEARA_PUBLIC"] = configuration["CEARA_PUBLIC"],
+                ["CEARA_DATA_PROFILE"] = configuration["CEARA_DATA_PROFILE"]
+            }).Build();
             var stagedDatabase = new Database(stagingConfig);
             stagedDatabase.ValidateSnapshot();
             var meta = stagedDatabase.Metadata();

@@ -7,9 +7,9 @@ export type Filters = {
 export const emptyFilters = (): Filters => ({ termo: '', cidade: '', cidades: [], segmento: '', segmentos: [], porte: '', bairro: '', ano_minimo: null, ano_maximo: null, score_minimo: 0, somente_celular: false, somente_email: false, somente_sem_dominio: false, ordem: 'score' });
 export type Contact = {
   id: number; cnpj: string; nome: string; empresa: string; email: string; telefone: string;
-  whatsapp: string; cidade: string; bairro: string; endereco: string; segmento: string;
+  whatsapp: string; cidade: string; cod_municipio: string; bairro: string; endereco: string; segmento: string;
   oportunidade: string; porte: string; abertura: string; dominio_proprio: boolean;
-  tem_celular: boolean; score: number;
+  tem_celular: boolean; score: number; busca: string;
 };
 export type PageContacts = { total: number; itens: Contact[] };
 export type Area = { codigo: string; nome: string; contatos: number; com_email: number; com_celular: number; sem_dominio: number; score_medio: number };
@@ -18,10 +18,17 @@ export type BaseInfo = {
   ramos?: number; versao_receita?: string; gerado_em?: string; recorte?: string;
   com_email?: number; com_celular?: number; sem_dominio?: number; score_medio?: number;
   tamanho_mb?: number; ia_configurada: boolean; modelo_ia: string;
+  publicacao_restrita?: boolean;
+  hospedagem_publica?: boolean; perfil_dados?: 'integral' | 'minimizado';
 };
+export type PrivacyNotice = { publicacao_restrita: boolean; hospedagem_publica: boolean; perfil_dados: 'integral' | 'minimizado'; responsavel: string; email: string; atualizado_em: string;
+  finalidade: string; dados_publicados: string; visitantes: string; compartilhamento: string;
+  retencao: string; direitos: string; transferencias: string; limites: string };
 export type AnalysisRow = Record<string, string | number>;
 export type ChatResult = { tipo: 'empresas'; titulo: string; filtros: Filters; total: number; itens: Contact[] } | { tipo: 'analise'; titulo: string; filtros: Filters; agrupar_por: string[]; itens: AnalysisRow[] };
 export type ChatResponse = { texto: string; resultados: ChatResult[]; fontes: { fonte: string; versao: string; filtros: Filters }[]; modelo: string };
+
+export const repositoryUrl = 'https://github.com/rabpaulo/mapa-oportunidade';
 
 export const number = (value: number | undefined) => new Intl.NumberFormat('pt-BR').format(value ?? 0);
 export const percent = (part: number, total: number) => (total ? part * 100 / total : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';

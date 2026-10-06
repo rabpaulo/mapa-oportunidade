@@ -29,7 +29,7 @@ export class CompaniesComponent {
   readonly size = 50;
   readonly skeletons = Array.from({ length: 8 }, (_, i) => i);
   readonly ports = ['Microempresa', 'Pequeno porte', 'Medio/grande', 'Nao informado'];
-  readonly checks: [keyof Filters, string][] = [['somente_celular', 'Com celular'], ['somente_email', 'Com e-mail'], ['somente_sem_dominio', 'E-mail sem domínio próprio']];
+  readonly checks = computed<[keyof Filters, string][]>(() => this.store.restricted() ? [] : [['somente_celular', 'Com celular'], ['somente_email', 'Com e-mail'], ['somente_sem_dominio', 'E-mail sem domínio próprio']]);
   readonly term = new FormControl(this.store.filters().termo, { nonNullable: true });
   readonly form = new FormGroup({
     cidade: new FormControl('', { nonNullable: true }), segmento: new FormControl('', { nonNullable: true }),

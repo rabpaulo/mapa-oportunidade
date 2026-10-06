@@ -66,19 +66,21 @@ def _titulo(texto):
                     for i, p in enumerate(palavras))
 
 
-# Empresario individual entra no cadastro com o CPF grudado no nome, ora antes
-# ("41.273.902 ALCINDO ROSA"), ora depois ("INGRID ALVES 03151432077"). Sao 45%
-# das razoes sociais. Alem de sujar a saudacao da campanha, e dado pessoal que
-# a lista nao precisa carregar.
+# Identificadores podem aparecer antes, depois ou no meio do nome cadastral.
+# Não os preserve nos nomes preparados, nem restaure um valor só numérico.
 _CPF_PREFIXO = re.compile(r"^[\d][\d.\-/]{5,}\s+")
 _CPF_SUFIXO = re.compile(r"\s+\d{9,14}$")
+_CPF_EM_QUALQUER_POSICAO = re.compile(r"(?<!\d)(?:\d{3}[.\s-]?\d{3}[.\s-]?\d{3}[.\s-]?\d{2})(?!\d)")
 
 
 def _limpar_nome(texto):
-    limpo = _CPF_SUFIXO.sub("", (texto or "").strip())
+    texto = unicodedata.normalize('NFKC', texto or '')
+    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Cf')
+    limpo = _CPF_EM_QUALQUER_POSICAO.sub("", texto.strip())
+    limpo = _CPF_SUFIXO.sub("", limpo)
     limpo = _CPF_PREFIXO.sub("", limpo)
-    # Se sobrou so pontuacao ou nada, o nome original era melhor que vazio.
-    return limpo.strip(" .-") or (texto or "").strip()
+    # Never restore the original identifier when no name remains.
+    return ' '.join(limpo.strip(" .-/").split())
 
 
 def carregar_tabela(nome):

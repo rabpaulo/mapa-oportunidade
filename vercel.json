@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "env": { "PORT": "8080" },
+  "env": { "PORT": "8080", "CEARA_PUBLIC": "1", "CEARA_DATA_PROFILE": "integral" },
+  "git": { "deploymentEnabled": false },
+  "regions": ["gru1"],
   "services": { "api": { "root": ".", "entrypoint": "Dockerfile.vercel", "runtime": "container" } },
   "rewrites": [{ "source": "/(.*)", "destination": { "service": "api" } }]
 }

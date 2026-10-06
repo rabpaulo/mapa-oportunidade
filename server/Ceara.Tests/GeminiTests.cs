@@ -21,16 +21,21 @@ public sealed class GeminiTests
         foreach (var value in new[] { "11111111000100", "Padaria São José", "padaria@gmail.com", "5585999990000", "Rua Um 12" }) Assert.DoesNotContain(value, outgoing);
         Assert.Contains("signature-1", outgoing); Assert.Contains("call-1", outgoing); Assert.Contains("exibidas", outgoing);
         var tool = host.Requests[1].GetProperty("contents")[2].GetProperty("parts")[0].GetProperty("functionResponse");
-        Assert.Equal(3, tool.GetProperty("response").GetProperty("total").GetInt32());
+        Assert.Equal(JsonValueKind.Null, tool.GetProperty("response").GetProperty("total").ValueKind);
+        Assert.False(tool.GetProperty("response").TryGetProperty("filtros", out _));
     }
     [Fact] public async Task AggregateToolsAndHistoryArePreserved()
     {
         using var host = new TestHost(); host.Respond("[{\"functionCall\":{\"name\":\"analisar_base\",\"args\":{\"agrupar_por\":[\"cidade\"]}}}]"); host.Respond("[{\"text\":\"Fortaleza lidera.\"}]");
+        host.Sql("INSERT INTO contatos SELECT id+10, cnpj, nome, empresa, email, telefone, whatsapp, cidade, cod_municipio, bairro, endereco, segmento, oportunidade, porte, abertura, dominio_proprio, tem_celular, score, busca FROM contatos");
         using var client = host.CreateClient(); var history = Enumerable.Range(0, 20).Select(i => new { role = i % 2 == 0 ? "user" : "model", text = "message-" + i }).ToArray();
         var response = await client.PostAsJsonAsync("/api/chat", new { pergunta = "Compare", historico = history }); response.EnsureSuccessStatusCode();
         Assert.Equal(13, host.Requests[0].GetProperty("contents").GetArrayLength());
         Assert.Equal("message-8", host.Requests[0].GetProperty("contents")[0].GetProperty("parts")[0].GetProperty("text").GetString());
         Assert.Contains("percentual_com_email", host.Requests[1].ToString()); Assert.Equal("analise", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("resultados")[0].GetProperty("tipo").GetString());
+        var rows = host.Requests[1].GetProperty("contents")[14].GetProperty("parts")[0].GetProperty("functionResponse").GetProperty("response").GetProperty("itens");
+        Assert.Single(rows.EnumerateArray());
+        Assert.Equal(6, rows[0].GetProperty("contatos").GetInt32());
     }
     [Fact] public async Task InvalidToolsAreRecoverableAndRoundsAreBounded()
     {

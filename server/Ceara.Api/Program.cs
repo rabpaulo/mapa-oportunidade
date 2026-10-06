@@ -7,6 +7,10 @@ using Microsoft.Data.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 LocalEnvironment.Load(builder.Configuration);
+_ = PublicationProfile.Get(builder.Configuration);
+// Request URLs can contain user-entered text; do not persist them in public logs.
+if (builder.Configuration["CEARA_PUBLIC"] == "1")
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 var port = builder.Configuration["PORT"] ?? "8000";
 builder.WebHost.UseUrls($"http://{(builder.Configuration["VERCEL"] == "1" || builder.Configuration["CEARA_CONTAINER"] == "1" ? "0.0.0.0" : "127.0.0.1")}:{port}");
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -16,9 +20,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<Database>();
+builder.Services.AddSingleton<PrivacyPolicy>();
 builder.Services.AddHttpClient<Gemini>(http => http.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddRateLimiter(options =>
 {
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        builder.Configuration["CEARA_PUBLIC"] != "1" ? RateLimitPartition.GetNoLimiter("local") :
+        RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new() { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     // Per-instance protection for local use. Vercel's WAF rule provides the
     // edge limit across instances; do not treat this as a distributed budget.
     options.AddPolicy("chat", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -27,7 +36,7 @@ builder.Services.AddRateLimiter(options =>
     {
         context.HttpContext.Response.StatusCode = 429;
         context.HttpContext.Response.Headers.RetryAfter = "60";
-        await context.HttpContext.Response.WriteAsJsonAsync(new { detail = "Muitas perguntas em pouco tempo. Aguarde um minuto e tente novamente." }, cancellation);
+        await context.HttpContext.Response.WriteAsJsonAsync(new { detail = "Muitas solicitações em pouco tempo. Aguarde um minuto e tente novamente." }, cancellation);
     };
 });
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -41,9 +50,17 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 await Snapshot.Restore(app.Configuration, app.Services.GetRequiredService<Database>());
+if (app.Services.GetRequiredService<PrivacyPolicy>().PublicDeployment)
+    app.Services.GetRequiredService<Database>().ValidateSnapshot();
 if (app.Configuration["VERCEL"] == "1") app.UseForwardedHeaders();
 app.Use(async (context, next) =>
 {
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    if (app.Configuration["CEARA_PUBLIC"] == "1")
+        context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+    if (context.Request.Path.StartsWithSegments("/api")) context.Response.Headers.CacheControl = "no-store";
     try
     {
         if (context.Request.Path.StartsWithSegments("/api") && context.Request.Method is not ("GET" or "HEAD" or "OPTIONS"))
@@ -69,11 +86,15 @@ app.MapGet("/api/docs", () => Results.Content("""
     </html>
     """, "text/html"));
 app.MapGet("/api/saude", () => new { status = "ok", uf = "CE" });
+app.MapGet("/api/privacidade", (PrivacyPolicy policy) => policy.Notice);
 app.MapGet("/api/base", (Database database, Gemini gemini, CancellationToken cancellation) =>
 {
     var info = new Dictionary<string, object?> { ["ia_configurada"] = gemini.Configured, ["modelo_ia"] = gemini.Model };
     try { foreach (var pair in database.Metadata(cancellation)) info[pair.Key] = pair.Value; info["disponivel"] = true; }
     catch (DatabaseUnavailable error) { info["disponivel"] = false; info["erro"] = error.Message; }
+    info["publicacao_restrita"] = app.Services.GetRequiredService<PrivacyPolicy>().Restricted;
+    info["hospedagem_publica"] = app.Services.GetRequiredService<PrivacyPolicy>().PublicDeployment;
+    info["perfil_dados"] = PublicationProfile.Get(app.Configuration);
     return info;
 });
 app.MapPost("/api/contatos/buscar", async (HttpRequest request, Database database, CancellationToken cancellation) =>
