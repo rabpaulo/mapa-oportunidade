@@ -1,5 +1,5 @@
 // Provides the corresponding application source without databases or secrets.
-import { readdirSync, lstatSync, mkdirSync } from 'node:fs';
+import { readdirSync, lstatSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -17,7 +17,12 @@ function walk(relative) {
     }
   } else if (stat.isFile()) files.push(relative);
 }
-for (const path of ['README.md', 'LICENSE', 'NOTICE', '.gitignore', '.dockerignore', '.vercelignore', '.env.example', 'requirements.txt', 'requirements.lock', 'global.json', 'pytest.ini', 'Dockerfile.vercel', 'vercel.json', 'iniciar.sh', 'src', 'pipeline', 'scripts', 'server', 'app', 'docs', 'tests', 'deployment/snapshot.json']) walk(path);
+for (const path of ['README.md', 'LICENSE', 'NOTICE', 'requirements.txt', 'requirements.lock', 'global.json', 'pytest.ini', 'Dockerfile.vercel', 'vercel.json', 'iniciar.sh', 'src', 'pipeline', 'scripts', 'server', 'app', 'docs', 'tests', 'deployment/snapshot.json']) walk(path);
+// Vercel may omit transport metadata such as .gitignore/.vercelignore.
+// Include these when present without making them a prerequisite for compiling.
+for (const path of ['.gitignore', '.dockerignore', '.vercelignore', '.env.example']) {
+  if (existsSync(resolve(root, path))) walk(path);
+}
 mkdirSync(dirname(output), { recursive: true });
 const result = spawnSync('tar', ['-czf', output, '--null', '-T', '-'], { cwd: root, input: files.join('\0') + '\0', encoding: 'utf8' });
 if (result.status !== 0) throw new Error(result.stderr || 'Source packaging failed.');
