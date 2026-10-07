@@ -1,49 +1,38 @@
-# Operação da publicação integral
+# Operação da publicação minimizada
 
-A publicação usa uma cópia consistente da base local original, com 680.298 registros e 19 colunas, incluindo contatos e endereços. Não passa pelo minimizador, não exclui empresários individuais e não limpa nomes na preparação do snapshot. O banco original permanece intacto. Dados pessoais podem estar presentes nos campos do cadastro empresarial; não há certificação de conformidade LGPD.
+A publicação Vercel usa somente um banco derivado do Ceará com política `empresas-sem-dados-pessoais-v2`. A base nacional integral permanece no computador local. Os campos publicados são id, CNPJ, município/código, atividade, oportunidade, porte, ano de abertura e score. Nomes, contatos, CPF, bairro e endereço não são copiados para o banco, FTS, CSV ou arquivos do release. Empresários individuais, MEIs, naturezas jurídicas não verificadas e registros suprimidos são excluídos.
 
-## Configuração e publicação
+O minimizador cria um SQLite novo; não apaga colunas de uma cópia que pudesse conservar dados em páginas livres. Downloads do banco são backups dessa base nova. Score e agregados públicos não usam contatos pessoais. A minimização técnica não estabelece sozinha conformidade LGPD; a origem pública também não autoriza automaticamente qualquer reutilização.
 
-Na Vercel, mantenha `CEARA_PUBLIC=1` e `CEARA_DATA_PROFILE=integral`. A primeira variável mantém CSP, mapa somente local, limites de requisições, redução de logs e bloqueio do Gemini; a segunda seleciona o banco completo. O perfil integral rejeita um snapshot marcado como minimizado para evitar publicar um recorte como se fosse completo.
+## Preparação e publicação
 
-```bash
-.venv/bin/python scripts/preparar_release.py --dados data --saida releases/integral-NOVA-VERSAO --fixar
-npx vercel deploy
-# Depois de validar a prévia:
-npx vercel promote URL_DO_DEPLOYMENT
-```
-
-O snapshot fixado é incluído no upload local. Bancos originais, releases e `.env` ficam fora do Git e do contexto enviado. O runtime consulta o banco somente para leitura, fora dos assets públicos. Ele não consulta registros externos durante as buscas.
-
-O GitHub contém código, documentação e exemplos de configuração. Quem clonar baixa e prepara a fonte pública localmente conforme o README. Não inclua bases ou chaves em commits, Releases ou artifacts do GitHub. O arquivo `/codigo-fonte.tar.gz` oferece o código correspondente de cada deployment, sem dados e segredos, conforme a licença AGPL.
-
-Deploys por push estão desativados em `vercel.json`: builds remotos apenas do Git não têm o snapshot. Os deploys continuam sendo feitos manualmente com a base fixada e validada.
-
-## Aviso e atendimento
-
-O site informa a origem: Dados Abertos CNPJ da Receita Federal, obtidos pelo espelho Casa dos Dados, com malhas e códigos do IBGE. Apresenta a versão do cadastro, esclarece que informações podem estar desatualizadas e identifica o score como cálculo da aplicação.
-
-`PUBLIC_RESPONSAVEL` e `PUBLIC_PRIVACY_EMAIL` precisam de identificação real e endereço público monitorado. Ainda não foram fornecidos. A interface informa essa pendência e não inventa uma identidade nem um canal operacional.
-
-Para pedidos de titulares, registre data, objeto e resultado em local privado. Solicite somente comprovação proporcional; não peça CPF completo ou documentos por padrão. Avalie acesso, correção, oposição, bloqueio e supressão conforme o direito aplicável. A declaração completa de acesso tem prazo legal de até 15 dias, sem generalizar esse prazo para todos os pedidos.
-
-O perfil integral não aplica automaticamente a lista de supressões do minimizador. Uma correção ou retirada atendida precisa ser incorporada à cópia de publicação antes de gerar novos releases e preservada nas atualizações. Valide o resultado no banco, API e interface. Não edite apenas o SQLite temporário de um container.
-
-Retire deployments anteriores afetados por pedidos atendidos e não faça rollback para uma base anterior ao atendimento. Revise também releases e cópias locais conforme finalidade e retenção. Não há promessa de apagar cópias de terceiros.
-
-## Perfil minimizado opcional
-
-`CEARA_DATA_PROFILE=minimizado` preserva as regras anteriores: exige base marcada, campos privados vazios e uma lista positiva de campos da API. A preparação exclui empresários individuais e classificações não verificadas, limpa identificadores nos nomes e reaplica a lista privada de supressões.
+`CEARA_PUBLIC=1` ou `VERCEL=1` exige `CEARA_DATA_PROFILE=minimizado`. O perfil integral e a política antiga que conservava nomes falham antes da exposição. O build valida o snapshot e o runtime repete a validação. Apenas arquivos e tabelas permitidos são aceitos.
 
 ```bash
 .venv/bin/python scripts/preparar_base_publica.py --saida artifacts/publica-NOVA-VERSAO
-.venv/bin/python scripts/preparar_release.py --dados artifacts/publica-NOVA-VERSAO --saida releases/publica-NOVA-VERSAO --fixar
+.venv/bin/python scripts/preparar_release.py --dados artifacts/publica-NOVA-VERSAO --saida releases/publica-NOVA-VERSAO --publico --fixar
+npx vercel deploy
+npx vercel promote URL_DA_PREVIA_VALIDADA
 ```
 
-Esse fluxo não é usado pelo deployment integral.
+Verifique `/api/base`, busca/detalhe, downloads, mapa, bloqueio de SP e da coleta local. O assistente deve usar somente ferramentas do esquema público, sem nomes, contatos ou endereços. O banco nacional, origens e segredos são excluídos do upload. Não publique snapshots integrais antigos em links alternativos. Deploys de versões anteriores que exponham dados pessoais precisam ser retirados conforme o atendimento e a política de retenção; não faça rollback para eles.
 
-## Pendências de governança
+## Atendimento e supressão
 
-Defina finalidade, necessidade, hipótese legal dos dados pessoais, atendimento, retenção e controles de acesso. Confira operadores, contratos e mecanismos de transferência internacional aplicáveis à Vercel, inclusive registros técnicos. A pesquisa está em [fontes oficiais](lgpd-fontes-oficiais.md).
+Configure `PUBLIC_RESPONSAVEL` e `PUBLIC_PRIVACY_EMAIL` com identificação real e e-mail monitorado. Sem configuração, a interface informa a pendência; não inventa um responsável. Avalie pedidos de acesso, correção, oposição, bloqueio ou supressão conforme a LGPD. Registre decisões em ambiente privado e peça somente comprovação proporcional, sem exigir CPF completo por padrão.
 
-Em incidentes, contenha a exposição, preserve evidências com acesso restrito e avalie as obrigações de comunicação. A aplicação pública mantém o Gemini desativado, sem cadastro, analytics ou formulários de coleta. Na execução local, o filtro Gemini não garante anonimização de texto livre.
+```bash
+.venv/bin/python scripts/preparar_base_publica.py --suprimir-cnpj CNPJ_SEM_PONTUACAO
+```
+
+A lista usa hashes do CNPJ e permanece privada. O minimizador reaplica supressões a cada release; um novo release precisa ser preparado e publicado para efetivar alterações. Elas não alteram o cadastro oficial da Receita. Não se promete apagar cópias já obtidas por terceiros.
+
+## Hospedagem e IA
+
+A publicação mantém mapa local, CSP e limites de requisições. O chat usa a chave Gemini do responsável, configurada como segredo no Vercel em Preview e Production; a chave não chega ao navegador e não acompanha os artefatos. A hospedagem ainda pode tratar IP e registros técnicos. Defina finalidade, hipótese legal, retenção, atendimento e mecanismos aplicáveis aos fluxos reais da Vercel. Selecionar São Paulo como região não demonstra residência integral dos tratamentos no Brasil.
+
+Na execução local cada usuário fornece sua própria chave em `.env`. Nos dois modos, o Gemini recebe perguntas, histórico, categorias e agregados, sem registros individuais; a publicação só oferece ferramentas compatíveis com a base minimizada do Ceará. O filtro não garante anonimização de texto livre. Consulte a [pesquisa de fontes oficiais](lgpd-fontes-oficiais.md), que registra também achados históricos da antiga publicação integral.
+
+A configuração `CEARA_DATA_PROFILE` do projeto Vercel também deve ser `minimizado`, tanto em Preview quanto em Production. Um valor antigo no painel pode prevalecer durante a promoção e será rejeitado pelo startup. Atualize-o antes de promover a prévia.
+
+A imagem de produção usa o argumento obrigatório `--publicacao-ceara` no build e na inicialização. Ele ativa a proteção pública independentemente de `CEARA_PUBLIC` no painel; um perfil integral continua sendo rejeitado.

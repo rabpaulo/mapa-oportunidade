@@ -1,4 +1,4 @@
-> **Estado atual:** o plano aprovado em 05/10/2026 substituiu o recorte minimizado por uma cópia integral da base local e código público no GitHub. A publicação integral não executa o minimizador. As recomendações e medições abaixo registram a auditoria dos estados anteriores; não são uma descrição atual de campos omitidos. Veja [operação atual](operacao-privacidade.md).
+> **Estado atual (06/10/2026):** a publicação voltou a um recorte minimizado, agora com política v2 e esquema próprio sem nomes, contatos ou endereços. Somente o Ceará e pessoas jurídicas verificadas são publicados; a execução local suporta todas as UFs. As medições abaixo registram a auditoria histórica da publicação integral e não descrevem os arquivos atuais. Veja [operação atual](operacao-privacidade.md).
 
 # LGPD e publicação do Mapa de Oportunidades Ceará
 

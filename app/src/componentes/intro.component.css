@@ -1,0 +1,64 @@
+/* Reference: dashboardfortaleza.vercel.app. Native CSS, existing Geist/Lucide identity.
+   DESIGN_VARIANCE: 5, MOTION_INTENSITY: 4, VISUAL_DENSITY: 3.
+   The geographic graphic uses the project's real IBGE mesh, without a data scale. */
+:host { display: block; }
+.intro { position: fixed; inset: 0; z-index: 60; overflow: auto; color-scheme: dark; color: #fafafa; background: #0a0a0a; background-image: radial-gradient(circle, #ffffff0b .65px, transparent .9px); background-size: 6px 6px; transition: transform 740ms cubic-bezier(.76, 0, .24, 1); }
+.intro-leaving { transform: translateY(-100%); pointer-events: none; }
+.intro-inner { width: min(100%, 1540px); min-height: 100dvh; margin: 0 auto; padding: 0 48px; display: flex; flex-direction: column; }
+.intro-header { min-height: 80px; display: flex; justify-content: space-between; align-items: center; gap: 28px; }
+.intro-brand { font-size: 12px; line-height: 1.4; letter-spacing: -.01em; flex-shrink: 0; }
+.intro-brand strong { display: block; font-size: 23px; font-weight: 550; letter-spacing: -.045em; }
+.intro-header nav { display: flex; align-items: center; gap: 8px; }
+.intro-header nav button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 15px; border-radius: 6px; font-family: 'Geist Mono', monospace; font-size: 12px; color: #b5b5b5; white-space: nowrap; }
+.intro-header nav button:hover { color: #fafafa; background: #ffffff0a; }
+.intro-header nav button:last-child { border: 1px solid #464646; color: #fafafa; margin-left: 16px; }
+.intro-hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; flex: 1; align-items: center; padding: 48px 0; }
+.intro-copy { position: relative; z-index: 1; }
+.intro-eyebrow { font-family: 'Geist Mono', monospace; font-size: 12px; color: #b5b5b5; margin-bottom: 30px; }
+.intro h1 { font-size: clamp(48px, 6.6vw, 98px); font-weight: 400; letter-spacing: -.065em; line-height: 1.02; text-wrap: initial; margin-bottom: 30px; }
+.intro-description { max-width: 49ch; font-size: 17px; line-height: 1.7; color: #b5b5b5; margin-bottom: 30px; text-wrap: pretty; }
+.intro-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.intro-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; border-radius: 6px; padding: 13px 16px; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.4; white-space: nowrap; }
+.intro-primary { background: #fafafa; color: #171717; border: 1px solid #fafafa; }
+.intro-primary:hover { background: #dedede; border-color: #dedede; }
+.intro-secondary { border: 1px solid #464646; color: #fafafa; }
+.intro-secondary:hover { background: #ffffff0c; border-color: #7a7a7a; }
+.intro-geography { min-width: 0; margin: 0; display: flex; flex-direction: column; align-items: center; }
+.intro-geography img { display: block; width: min(100%, 560px); height: auto; max-height: min(60dvh, 640px); object-fit: contain; }
+.intro-geography figcaption { display: flex; justify-content: space-between; gap: 16px; width: 100%; max-width: 460px; padding-top: 14px; font-family: 'Geist Mono', monospace; font-size: 10px; color: #a1a1a1; }
+.intro-geography figcaption span { color: #a1a1a1; }
+.intro-footer { display: flex; justify-content: space-between; gap: 24px; align-items: center; min-height: 64px; font-family: 'Geist Mono', monospace; color: #a1a1a1; font-size: 11px; border-top: 1px solid #ffffff12; }
+.intro-footer button { display: inline-flex; align-items: center; gap: 9px; color: #b5b5b5; padding: 12px 0; white-space: nowrap; }
+.intro-footer button:hover { color: #fafafa; }
+.intro button:focus-visible, .intro a:focus-visible { outline: 2px solid #fafafa; outline-offset: 5px; }
+.intro-skip { position: absolute; top: -100px; left: 24px; background: #fafafa; color: #171717; padding: 12px; z-index: 2; }
+.intro-skip:focus { top: 12px; }
+@media (max-width: 1100px) {
+  .intro-inner { padding: 0 32px; }
+  .intro-header nav { gap: 0; }
+  .intro-header nav button { padding: 10px 12px; }
+  .intro h1 { font-size: clamp(48px, 6.6vw, 76px); }
+  .intro-description { font-size: 16px; }
+}
+@media (max-width: 760px) {
+  .intro-inner { padding: 0 24px; }
+  .intro-header { padding: 20px 0 0; align-items: flex-start; flex-direction: column; gap: 20px; }
+  .intro-header nav { justify-content: space-between; width: 100%; gap: 4px; }
+  .intro-header nav button { padding: 9px 8px; font-size: 11px; }
+  .intro-header nav button:last-child { margin-left: 0; }
+  .intro-header nav button:last-child ceara-icon { display: none; }
+  .intro-hero { grid-template-columns: 1fr; gap: 26px; padding: 38px 0 30px; }
+  .intro-eyebrow { font-size: 10px; margin-bottom: 22px; }
+  .intro h1 { font-size: clamp(42px, 10.9vw, 76px); margin-bottom: 22px; }
+  .intro-description { font-size: 15px; max-width: 45ch; margin-bottom: 24px; }
+  .intro-actions { gap: 10px; }
+  .intro-button { padding: 12px 13px; font-size: 11px; gap: 9px; }
+  .intro-geography img { max-height: 32dvh; width: min(75%, 320px); }
+  .intro-geography figcaption { font-size: 9px; }
+  .intro-footer { font-size: 10px; gap: 12px; }
+}
+@media (max-width: 400px) {
+  .intro-header nav button { padding: 9px 5px; font-size: 10px; }
+  .intro-geography figcaption { flex-wrap: wrap; gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .intro { transition: none; } .intro button { transition: none; } }

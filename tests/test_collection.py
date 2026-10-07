@@ -116,12 +116,12 @@ def configure_pipeline(monkeypatch):
         for key in keys:
             monkeypatch.setattr(module, key, getattr(module, key))
 
-    def command(self, script, staging):
+    def command(self, script, staging, ufs=('CE',)):
         module = {'ingestar_receita.py': ingestar_receita, 'gerar_leads.py': gerar_leads}[script]
         with monkeypatch.context() as context:
             context.setenv('TMP', str(staging))
             context.setenv('TEMP', str(staging))
-            context.setattr(sys, 'argv', [script, '--uf', 'CE', '--dados', str(staging)])
+            context.setattr(sys, 'argv', [script, '--uf', *ufs, '--dados', str(staging)])
             assert module.main() == 0
 
     monkeypatch.setattr(JobManager, 'command', command)
@@ -210,7 +210,7 @@ def test_collection_cli_help_and_other_ufs_are_rejected():
     help_result = subprocess.run([sys.executable, 'scripts/coletar.py', '--help'], cwd=root, capture_output=True, text=True)
     assert help_result.returncode == 0
     assert '--reaproveitar' in help_result.stdout
-    for args in [['--uf', 'SP'], ['--blocos', '0'], ['--blocos', '11']]:
+    for args in [['--uf', 'XX'], ['--blocos', '0'], ['--blocos', '11']]:
         result = subprocess.run([sys.executable, 'src/ingestar_receita.py', *args], cwd=root, capture_output=True, text=True)
         assert result.returncode == 2
         assert 'invalid choice' in result.stderr
@@ -252,3 +252,65 @@ def test_interrupt_stops_the_real_pipeline_child(tmp_path, monkeypatch):
         JobManager(log_output=interrupt).command('waiting.py', tmp_path)
     assert len(children) == 1
     assert children[0].poll() is not None
+
+
+def test_multi_state_collection_preserves_text_cnpj_and_downloads_once(sample_data, source, monkeypatch):
+    responses, requested = source
+    version = f'{receita.ESPELHO}/2026-09-14/'
+    ce = establishment('AB12CD34')
+    sp = establishment('AB12CD34', uf='SP', city='7000')
+    sp[receita.CNPJ_ORDEM] = 'E08G'
+    responses[version + 'Estabelecimentos0.zip'] = archive([ce, sp, establishment('00000001')], False)
+    responses[version + 'Empresas0.zip'] = archive([
+        ['AB12CD34', 'EMPRESA ALFA LTDA', '2062', '49', '1000', '01', ''],
+        ['00000001', 'EMPRESA NUMERICA LTDA', '2062', '49', '1000', '01', ''],
+    ], False)
+    responses[version + 'Municipios.zip'] = archive([['1389', 'FORTALEZA'], ['7000', 'SAO PAULO']])
+    cache_ibge(sample_data)
+    (sample_data / 'ibge/municipios_SP.json').write_text(json.dumps([{'id': '3550308', 'nome': 'São Paulo'}]))
+    (sample_data / 'ibge/malha_35.geojson').write_text(json.dumps({'type': 'FeatureCollection', 'features': []}))
+    (sample_data / 'ibge/estados.json').write_text(json.dumps([{'id': 23, 'sigla': 'CE'}, {'id': 35, 'sigla': 'SP'}]))
+    untouched = sample_data / 'uf/MG/contatos.db'
+    untouched.parent.mkdir()
+    untouched.write_bytes((sample_data / 'uf/CE/contatos.db').read_bytes())
+    before = untouched.read_bytes()
+    configure_pipeline(monkeypatch)
+    assert collect(['--uf', 'CE', 'SP', 'CE']) == 0
+    for uf, expected in [('CE', 'AB12CD34000100'), ('SP', 'AB12CD34E08G00')]:
+        with connection(sample_data / 'uf' / uf / 'contatos.db', uf) as conn:
+            assert conn.execute('SELECT cnpj,empresa FROM contatos WHERE cnpj=?', (expected,)).fetchone() == (expected, 'Empresa Alfa Ltda')
+            if uf == 'CE':
+                assert conn.execute("SELECT cnpj FROM contatos WHERE empresa='Empresa Numerica Ltda'").fetchone()[0] == '00000001000100'
+        bundles = list((sample_data / 'uf' / uf / 'downloads').iterdir())
+        assert len(bundles) == 1
+        with gzip.open(bundles[0] / 'contatos.csv.gz', 'rt') as f:
+            assert list(csv.DictReader(f))[0]['cnpj'] == expected
+    assert len([url for url in requested if '/Estabelecimentos' in url]) == 10
+    assert len([url for url in requested if '/Empresas' in url]) == 10
+    assert not list(sample_data.glob('.atualizacao-*'))
+    assert untouched.read_bytes() == before
+
+
+@pytest.mark.parametrize('uf,source_name,official_name,code', [
+    ('BA', 'Santa Teresinha', 'santa terezinha', '2928505'),
+    ('MG', 'Brasopolis', 'brazopolis', '3108909'),
+    ('PA', 'Santa Isabel do para', 'santa izabel do para', '1506500'),
+    ('RJ', 'Parati', 'paraty', '3303807'),
+    ('RN', 'Ares', 'arez', '2401206'),
+    ('RN', 'Boa Saude', 'januario cicco', '2405306'),
+    ('RR', 'Sao Luiz', 'sao luiz do anaua', '1400605'),
+    ('RS', 'Santana do Livramento', 'sant ana do livramento', '4317103'),
+    ('TO', 'Fortaleza do Tabocao', 'tabocao', '1708254'),
+    ('TO', 'Sao Valerio da Natividade', 'sao valerio', '1720499'),
+])
+def test_official_municipal_alias_is_scoped_to_its_state(uf, source_name, official_name, code):
+    import banco
+    with sqlite3.connect(':memory:') as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute('CREATE TABLE municipios(cod_municipio TEXT,nome TEXT,codigo_ibge TEXT,contatos INTEGER)')
+        conn.execute('CREATE TABLE meta(chave TEXT PRIMARY KEY,valor TEXT)')
+        conn.execute('INSERT INTO municipios VALUES(?,?,NULL,1)', ('3929', source_name))
+        official = {official_name: code}
+        assert banco.aplicar_codigos_ibge(conn, official, uf='CE') == (0, 1)
+        assert banco.aplicar_codigos_ibge(conn, official, uf=uf) == (1, 0)
+        assert conn.execute('SELECT codigo_ibge FROM municipios').fetchone()[0] == code

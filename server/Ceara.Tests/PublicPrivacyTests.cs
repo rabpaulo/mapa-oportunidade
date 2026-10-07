@@ -9,32 +9,59 @@ namespace Ceara.Tests;
 
 public sealed class PublicPrivacyTests
 {
-    private static void MakePublic(TestHost host)
+    [Theory]
+    [InlineData("00000000000191")]
+    [InlineData("00000000E08G12")]
+    public async Task PublicSearchPreservesLeadingZerosAndAlphanumericCnpjs(string cnpj)
     {
-        host.Settings["CEARA_PUBLIC"] = "1";
-        host.Settings["PUBLIC_RESPONSAVEL"] = "Responsável de Teste";
-        host.Settings["PUBLIC_PRIVACY_EMAIL"] = "privacy@example.invalid";
-        host.Sql("""
-            INSERT INTO meta VALUES('publicacao_restrita','1');
-            UPDATE contatos SET email='', telefone='', whatsapp='', bairro='', endereco='', tem_celular=0, dominio_proprio=0;
-            """);
+        using var host=new TestHost(); MakePublic(host);
+        host.Sql($"UPDATE contatos SET cnpj='{cnpj}' WHERE id=1; INSERT INTO contatos_fts(contatos_fts) VALUES('rebuild')");
+        host.PrepareDownloads();
+        using var client=host.CreateClient();
+        var response=await client.PostAsJsonAsync("/api/contatos/buscar",new { filtros=new { termo=cnpj.ToLowerInvariant() } });
+        response.EnsureSuccessStatusCode();
+        var result=await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1,result.GetProperty("total").GetInt32());
+        Assert.Equal(cnpj,result.GetProperty("itens")[0].GetProperty("cnpj").GetString());
     }
 
     [Fact]
-    public async Task PublicResponsesUseAnAllowlistAndChatNeverCallsTheProvider()
+    public void PublicIndexCannotContainAnUnapprovedNameColumn()
+    {
+        using var host=new TestHost(); MakePublic(host);
+        host.Sql("DROP TABLE contatos_fts; CREATE VIRTUAL TABLE contatos_fts USING fts5(nome,content='contatos',content_rowid='id')");
+        var db=new Database(new ConfigurationBuilder().AddInMemoryCollection(host.Settings).Build());
+        Assert.Throws<DatabaseUnavailable>(()=>db.ValidateSnapshot());
+    }
+
+    [Fact]
+    public void PublicSnapshotRejectsAPersonalIdentifierInTheCnpjField()
+    {
+        using var host = new TestHost(); MakePublic(host);
+        host.Sql("UPDATE contatos SET cnpj='12345678901' WHERE id=1");
+        var db = new Database(new ConfigurationBuilder().AddInMemoryCollection(host.Settings).Build());
+        Assert.Throws<DatabaseUnavailable>(() => db.ValidateSnapshot());
+    }
+
+    private static void MakePublic(TestHost host) => host.MakePublic();
+
+    [Fact]
+    public async Task PublicResponsesUseAnAllowlistAndChatUsesTheServerKey()
     {
         using var host = new TestHost(); MakePublic(host); using var client = host.CreateClient();
         var response = await client.PostAsJsonAsync("/api/contatos/buscar", new { }); response.EnsureSuccessStatusCode();
         var row = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("itens")[0];
-        Assert.Equal(10, row.EnumerateObject().Count());
-        foreach (var field in new[] { "email", "telefone", "whatsapp", "endereco", "bairro", "busca", "tem_celular", "dominio_proprio" }) Assert.False(row.TryGetProperty(field, out _));
+        Assert.Equal(9, row.EnumerateObject().Count());
+        foreach (var field in new[] { "nome", "empresa", "email", "telefone", "whatsapp", "endereco", "bairro", "busca", "tem_celular", "dominio_proprio" }) Assert.False(row.TryGetProperty(field, out _));
         var detail = await client.GetFromJsonAsync<JsonElement>("/api/contatos/1");
         Assert.False(detail.TryGetProperty("email", out _));
         var info = await client.GetFromJsonAsync<JsonElement>("/api/base");
         Assert.True(info.GetProperty("publicacao_restrita").GetBoolean());
-        Assert.False(info.GetProperty("ia_configurada").GetBoolean());
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/chat", new { pergunta = "Compare" })).StatusCode);
-        Assert.Empty(host.Requests);
+        Assert.True(info.GetProperty("ia_configurada").GetBoolean());
+        host.Respond("[{\"text\":\"Consulte os municípios do Ceará.\"}]");
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/chat", new { pergunta = "Compare os municípios" })).StatusCode);
+        Assert.Single(host.Requests);
+        Assert.DoesNotContain("simulated-key", info.ToString());
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         Assert.Contains("connect-src 'self'", response.Headers.GetValues("Content-Security-Policy").Single());
     }
@@ -48,7 +75,7 @@ public sealed class PublicPrivacyTests
         host.Sql("INSERT INTO meta VALUES('publicacao_restrita','1')");
         Assert.Throws<DatabaseUnavailable>(() => db.ValidateSnapshot());
         host.Sql("UPDATE contatos SET email='',telefone='',whatsapp='',endereco='',bairro=''");
-        db.ValidateSnapshot();
+        Assert.Throws<DatabaseUnavailable>(() => db.ValidateSnapshot());
     }
 
     [Fact]
@@ -62,43 +89,10 @@ public sealed class PublicPrivacyTests
     }
 
     [Fact]
-    public async Task FullPublicProfilePreservesEveryColumnWithoutDisablingHostingProtections()
+    public void FullPublicProfileIsRejectedEvenWhenExplicitlyConfigured()
     {
-        using var host = new TestHost();
-        host.Settings["CEARA_PUBLIC"] = "1";
-        host.Settings["CEARA_DATA_PROFILE"] = "integral";
-        host.Sql("UPDATE contatos SET nome='Empresa 123.456.789-09 Original', empresa='Empresa Original' WHERE id=1");
-        using var client = host.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/contatos/buscar", new { });
-        response.EnsureSuccessStatusCode();
-        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(5, result.GetProperty("total").GetInt32());
-        var row = result.GetProperty("itens")[0];
-        Assert.Equal(19, row.EnumerateObject().Count());
-        Assert.Equal("Empresa 123.456.789-09 Original", row.GetProperty("nome").GetString());
-        Assert.Equal("padaria@gmail.com", row.GetProperty("email").GetString());
-        Assert.Equal("(85) 99999-0000", row.GetProperty("telefone").GetString());
-        Assert.Equal("Rua Um 12", row.GetProperty("endereco").GetString());
-        Assert.Equal("Aldeota", row.GetProperty("bairro").GetString());
-        Assert.Equal("1389", row.GetProperty("cod_municipio").GetString());
-        Assert.Equal(90, row.GetProperty("score").GetInt32());
-        Assert.True(row.GetProperty("tem_celular").GetBoolean());
-        Assert.False(row.GetProperty("dominio_proprio").GetBoolean());
-        Assert.Contains("padaria", row.GetProperty("busca").GetString());
-        Assert.Equal(row.ToString(), (await client.GetFromJsonAsync<JsonElement>("/api/contatos/1")).ToString());
-        var info = await client.GetFromJsonAsync<JsonElement>("/api/base");
-        Assert.Equal("integral", info.GetProperty("perfil_dados").GetString());
-        Assert.True(info.GetProperty("hospedagem_publica").GetBoolean());
-        Assert.False(info.GetProperty("publicacao_restrita").GetBoolean());
-        Assert.False(info.GetProperty("ia_configurada").GetBoolean());
-        var policy = await client.GetFromJsonAsync<JsonElement>("/api/privacidade");
-        Assert.Contains("base local integral", policy.GetProperty("dados_publicados").GetString());
-        Assert.Contains("ainda não foi configurado", policy.GetProperty("direitos").GetString());
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/analises", new { agrupar_por = new[] { "bairro" } })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/chat", new { pergunta = "Compare" })).StatusCode);
-        Assert.Empty(host.Requests);
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
-        Assert.Contains("connect-src 'self'", response.Headers.GetValues("Content-Security-Policy").Single());
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["CEARA_PUBLIC"]="1", ["CEARA_DATA_PROFILE"]="integral" }).Build();
+        Assert.Throws<InvalidOperationException>(() => PublicationProfile.Get(config));
     }
 
     [Fact]
@@ -107,7 +101,7 @@ public sealed class PublicPrivacyTests
         using var host = new TestHost(); MakePublic(host);
         host.Settings["CEARA_DATA_PROFILE"] = "integral";
         var db = new Database(new ConfigurationBuilder().AddInMemoryCollection(host.Settings).Build());
-        Assert.Throws<DatabaseUnavailable>(() => db.ValidateSnapshot());
+        Assert.Throws<InvalidOperationException>(() => db.ValidateSnapshot());
     }
 
     [Fact]

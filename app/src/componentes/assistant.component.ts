@@ -1,4 +1,4 @@
-import { Component, ElementRef, Pipe, PipeTransform, effect, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Pipe, PipeTransform, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { marked } from 'marked';
@@ -29,8 +29,8 @@ export class AssistantComponent {
   readonly bottom = viewChild<ElementRef<HTMLDivElement>>('bottom');
   readonly textarea = viewChild<ElementRef<HTMLTextAreaElement>>('textarea');
   readonly number = number;
-  readonly filterLabel = filterLabel;
-  readonly suggestions = ['Quais municípios têm mais empresas na base?', 'Compare Fortaleza e Juazeiro do Norte.', 'Encontre padarias em Sobral com celular.', 'Me ajude a planejar uma pesquisa de mercado.'];
+  readonly filterLabel = (filters: Parameters<typeof filterLabel>[0]) => filterLabel(filters, this.store.uf());
+  readonly suggestions = computed(() => ['Quais municípios têm mais empresas na base?', 'Compare os municípios com mais empresas.', this.store.restricted() ? 'Encontre padarias no Ceará.' : 'Encontre padarias com celular nesta UF.', 'Me ajude a planejar uma pesquisa de mercado.']);
   readonly labels: Record<string, string> = { cidade: 'Município', bairro: 'Bairro', segmento: 'Ramo', porte: 'Porte', abertura: 'Ano', contatos: 'Empresas', com_email: 'Com e-mail', com_celular: 'Com celular', sem_dominio: 'E-mail sem domínio', score_medio: 'Score médio' };
   constructor() {
     this.question.valueChanges.pipe(takeUntilDestroyed()).subscribe(v => this.hasQuestion.set(!!v.trim()));
@@ -39,7 +39,7 @@ export class AssistantComponent {
   private readonly untilDestroyed = takeUntilDestroyed<ChatResponse>();
   submit(value = this.question.value) {
     const text = value.trim();
-    if (!text || this.loading()) return;
+    if (!text || this.loading() || !this.base().ia_configurada) return;
     const history = this.store.turns().slice(-12).map(t => ({ role: t.role, text: t.text.slice(0, 6000) }));
     const pendingTurn = { role: 'user' as const, text };
     this.store.turns.update(turns => [...turns, pendingTurn]);
@@ -53,7 +53,7 @@ export class AssistantComponent {
   keydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); this.submit(); }
   }
-  columns(groups: string[]) { return [...groups, 'contatos', 'com_celular', 'com_email', 'score_medio']; }
+  columns(groups: string[]) { return [...groups, 'contatos', ...(this.store.restricted() ? [] : ['com_celular', 'com_email']), 'score_medio']; }
   cell(row: AnalysisRow, column: string) { const v = row[column]; return typeof v === 'number' ? number(v) : v || 'Não informado'; }
   newConversation() { this.store.turns.set([]); this.error.set(''); }
 }

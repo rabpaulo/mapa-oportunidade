@@ -1,0 +1,30 @@
+<section class="intro" [class.intro-leaving]="leaving()" aria-labelledby="intro-title">
+  <div class="intro-inner">
+    <a class="intro-skip" href="#intro-title">Ir para a apresentação</a>
+    <header class="intro-header">
+      <div class="intro-brand">Mapa de Oportunidades<strong>Ceará</strong></div>
+      <nav aria-label="Navegação da apresentação">
+        <button (click)="enter('mapa')" [disabled]="leaving()">Mapa</button>
+        <button (click)="enter('empresas')" [disabled]="leaving()">Empresas</button>
+        <button (click)="enter('ramos')" [disabled]="leaving()">Ramos</button>
+        <button (click)="enter('base')" [disabled]="leaving()">Base <ceara-icon name="arrow-up-right" [size]="14" /></button>
+      </nav>
+    </header>
+    <main class="intro-hero">
+      <div class="intro-copy">
+        <p class="intro-eyebrow">Dados abertos. Oportunidades no Ceará.</p>
+        <h1 id="intro-title" tabindex="-1">Mapa de<br>Oportunidades</h1>
+        <p class="intro-description">Explore empresas do Ceará, compare municípios e encontre oportunidades por ramo de atividade com dados da Receita Federal.</p>
+        <div class="intro-actions">
+          <button class="intro-button intro-primary" (click)="enter('mapa')" [disabled]="leaving()"><ceara-icon name="map" [size]="18" />Explorar o mapa<ceara-icon name="arrow-up-right" [size]="17" /></button>
+          <button class="intro-button intro-secondary" (click)="enter('empresas')" [disabled]="leaving()">Consultar empresas<ceara-icon name="arrow-up-right" [size]="17" /></button>
+        </div>
+      </div>
+      <figure class="intro-geography">
+        <img src="/ceara-pixels.svg" width="560" height="640" alt="Silhueta do Ceará desenhada em pixels a partir da malha municipal do IBGE" fetchpriority="high">
+        <figcaption>Ceará, município por município<span>Malha territorial · IBGE</span></figcaption>
+      </figure>
+    </main>
+    <footer class="intro-footer"><span>Dados Receita Federal e IBGE</span><button (click)="enter('base')" [disabled]="leaving()">Conheça os dados<ceara-icon name="arrow-up-right" [size]="14" /></button></footer>
+  </div>
+</section>

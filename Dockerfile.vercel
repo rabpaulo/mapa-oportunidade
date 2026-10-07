@@ -23,20 +23,29 @@ RUN node fetch-snapshot.mjs deployment/snapshot.json /snapshot deployment/snapsh
 COPY . /source/
 RUN node /source/scripts/empacotar_codigo.mjs /source /codigo/codigo-fonte.tar.gz
 
+FROM api AS validation
+COPY --from=snapshot /snapshot/ /snapshot/
+ENV CEARA_PUBLIC=1 CEARA_DATA_PROFILE=minimizado CEARA_DATA_DIR=/tmp/ceara-build-check \
+    CEARA_SNAPSHOT_ARCHIVE=/snapshot/snapshot.tar.br CEARA_SNAPSHOT_MANIFEST=/snapshot/snapshot.json
+RUN dotnet /publish/Ceara.Api.dll --publicacao-ceara --validar-snapshot && rm -rf /tmp/ceara-build-check
+
 # SDK target used by the local development launcher.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS development
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv && rm -rf /var/lib/apt/lists/*
+COPY requirements.lock /tmp/requirements.lock
+RUN python3 -m venv /opt/ceara-python && /opt/ceara-python/bin/pip install --no-cache-dir -r /tmp/requirements.lock
 WORKDIR /workspace
-ENV CEARA_CONTAINER=1 PORT=8000 ASPNETCORE_ENVIRONMENT=Development
+ENV CEARA_CONTAINER=1 PORT=8000 ASPNETCORE_ENVIRONMENT=Development CEARA_PYTHON=/opt/ceara-python/bin/python CEARA_PROJECT_ROOT=/workspace
 ENTRYPOINT ["dotnet", "watch", "--no-hot-reload", "--project", "server/Ceara.Api", "run"]
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS production
 WORKDIR /app
-COPY --from=api /publish/ ./
+COPY --from=validation /publish/ ./
 COPY --from=web /src/app/dist/ceara/browser/ ./wwwroot/
 COPY --from=snapshot /codigo/codigo-fonte.tar.gz ./wwwroot/codigo-fonte.tar.gz
 COPY --from=snapshot /snapshot/ /snapshot/
-ENV PORT=8080 CEARA_CONTAINER=1 DOTNET_EnableDiagnostics=0 ASPNETCORE_ENVIRONMENT=Production \
+ENV CEARA_PUBLIC=1 CEARA_DATA_PROFILE=minimizado PORT=8080 CEARA_CONTAINER=1 DOTNET_EnableDiagnostics=0 ASPNETCORE_ENVIRONMENT=Production \
     CEARA_SNAPSHOT_ARCHIVE=/snapshot/snapshot.tar.br CEARA_SNAPSHOT_MANIFEST=/snapshot/snapshot.json CEARA_DATA_DIR=/tmp/ceara-data
 USER app
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "Ceara.Api.dll"]
+ENTRYPOINT ["dotnet", "Ceara.Api.dll", "--publicacao-ceara"]

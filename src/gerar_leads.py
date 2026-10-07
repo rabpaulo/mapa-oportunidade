@@ -22,6 +22,10 @@ import re
 import sys
 import time
 import unicodedata
+import sqlite3
+import tempfile
+import uuid
+from geografia import UFS
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -89,25 +93,39 @@ def carregar_tabela(nome):
         return {l[0]: l[1] for l in csv.reader(fh) if len(l) >= 2}
 
 
-def carregar_empresas(uf, log=print):
-    """cnpj_basico -> (razao_social, porte).
+class CompanyIndex:
+    def __init__(self, path):
+        self.folder = tempfile.TemporaryDirectory(prefix='.empresas-', dir=DADOS)
+        self.conn = sqlite3.connect(os.path.join(self.folder.name, 'empresas.db'))
+        self.conn.executescript('PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-16384; CREATE TABLE empresas (basico TEXT PRIMARY KEY, razao TEXT, porte TEXT) WITHOUT ROWID;')
+        if os.path.exists(path):
+            with gzip.open(path, 'rt', encoding='utf-8') as file:
+                reader = csv.reader(file)
+                next(reader, None)
+                batch = []
+                for row in reader:
+                    if len(row) >= 6:
+                        batch.append((row[0], row[1], row[5]))
+                    if len(batch) >= 20000:
+                        self.conn.executemany('INSERT OR REPLACE INTO empresas VALUES (?,?,?)', batch)
+                        batch.clear()
+                self.conn.executemany('INSERT OR REPLACE INTO empresas VALUES (?,?,?)', batch)
+            self.conn.commit()
 
-    Guarda tuplas em vez de dicionarios: sao 1,5 milhao de entradas e a
-    diferenca de memoria entre as duas formas e de centenas de megabytes.
-    """
-    caminho = os.path.join(RECEITA, f"empresas_{uf.lower()}.csv.gz")
-    if not os.path.exists(caminho):
-        log(f"  aviso: {os.path.basename(caminho)} ausente, "
-            "razao social ficara vazia")
-        return {}
-    mapa = {}
-    with gzip.open(caminho, "rt", encoding="utf-8") as fh:
-        leitor = csv.reader(fh)
-        next(leitor, None)
-        for linha in leitor:
-            if len(linha) >= 6:
-                mapa[linha[0]] = (linha[1], linha[5])
-    return mapa
+    def get(self, key, default):
+        row = self.conn.execute('SELECT razao, porte FROM empresas WHERE basico=?', (key,)).fetchone()
+        return row if row is not None else default
+
+    def __len__(self):
+        return self.conn.execute('SELECT COUNT(*) FROM empresas').fetchone()[0]
+
+    def close(self):
+        self.conn.close()
+        self.folder.cleanup()
+
+
+def carregar_empresas(uf, log=print):
+    return CompanyIndex(os.path.join(RECEITA, f'empresas_{uf.lower()}.csv.gz'))
 
 
 # Porte pesa muito na nota: 90% do cadastro e microempresa, e sem esse
@@ -239,7 +257,7 @@ def segmentos_do_banco(conn):
 
 def main():
     ap = argparse.ArgumentParser(description="Monta o banco de contatos de uma UF")
-    ap.add_argument("--uf", default="CE", choices=["CE"],
+    ap.add_argument("--uf", default="CE", type=str.upper, choices=sorted(UFS),
                     help="estado ja ingerido por ingestar_receita.py")
     ap.add_argument("--cidades", nargs="+", help="restringe a estes municipios")
     ap.add_argument("--dados", help="pasta de dados (padrao: data/ do projeto)")
@@ -269,12 +287,12 @@ def main():
     try:
         print("\nGravando contatos...", flush=True)
         construir(conn, municipios, empresas, uf, stats, args.cidades)
-        del empresas
 
         print("\nFinalizando o banco...", flush=True)
         meta = carregar_versao(uf)
         banco.finalizar(conn, uf, {
             "uf": uf,
+            "geracao": uuid.uuid4().hex,
             "versao_receita": meta.get("versao_receita", ""),
             "baixado_em": meta.get("baixado_em", ""),
             "gerado_em": time.strftime("%Y-%m-%d %H:%M"),
@@ -284,7 +302,7 @@ def main():
 
         print("\nCasando com os codigos do IBGE...", flush=True)
         banco.aplicar_codigos_ibge(
-            conn, ibge.mapa_nome_codigo(DADOS, uf, banco.chave_busca))
+            conn, ibge.mapa_nome_codigo(DADOS, uf, banco.chave_busca), uf=uf)
 
         print("\nPreparando malha do mapa...", flush=True)
         ibge.garantir_malhas(DADOS, uf)
@@ -292,6 +310,7 @@ def main():
         escritos = segmentos_do_banco(conn)
     finally:
         conn.close()
+        empresas.close()
 
     segundos = time.time() - inicio
     caminho = mod_relatorio.gerar(

@@ -1,0 +1,32 @@
+<section class="base-layout">
+  <div class="base-info">
+    <div class="base-title"><ceara-icon name="database" [size]="24" /><h2>Base de {{ base().nome_uf ?? base().uf ?? store.uf() }}</h2><span class="tag">{{ base().disponivel ? 'Disponível' : 'Indisponível' }}</span></div>
+    <dl class="base-facts"><div><dt>{{ base().publicacao_restrita ? 'Empresas publicadas' : 'Empresas com contato' }}</dt><dd>{{ number(base().contatos) }}</dd></div><div><dt>Municípios</dt><dd>{{ number(base().municipios) }}</dd></div><div><dt>Ramos de atividade</dt><dd>{{ number(base().ramos) }}</dd></div><div><dt>Versão do cadastro</dt><dd>{{ date(base().versao_receita) }}</dd></div><div><dt>Base gerada em</dt><dd>{{ date(base().gerado_em) }}</dd></div><div><dt>Armazenamento do banco</dt><dd>{{ base().tamanho_mb ?? 0 }} MB</dd></div></dl>
+    @if (base().erro) { <p class="inline-error" role="alert">{{ base().erro }}</p> }
+    <div class="base-provenance"><h3>Como ler estes dados</h3>@if (base().contatos_sem_malha) { <p>{{ number(base().contatos_sem_malha) }} registro(s) da origem não têm município verificado nesta UF. Eles permanecem nos arquivos e nas consultas, sem projeção no mapa.</p> }<p>Dados Abertos CNPJ da Receita Federal, processados para {{ base().nome_uf ?? store.uf() }}.</p><p>{{ base().publicacao_restrita ? base().recorte : 'A base reúne estabelecimentos ativos na data do cadastro com e-mail ou celular aproveitável.' }}</p><p>{{ base().publicacao_restrita ? 'O score público usa atividade, porte e ano de abertura, sem indicadores de contato. Nomes e identificadores pessoais não são publicados.' : 'O score é uma priorização para serviços digitais. “Sem domínio próprio” deriva do e-mail.' }} O ano de abertura não contém mês ou dia.</p><p>Malhas e códigos de municípios: IBGE.</p></div>
+    @if (!base().hospedagem_publica && base().disponivel) {
+      <div class="base-provenance"><h3>Baixar arquivos de {{ store.uf() }}</h3>
+        @if (downloadError()) { <p class="inline-error" role="alert">{{ downloadError() }}</p> }
+        @for (item of downloads(); track item.id) { <a class="download-item" [href]="item.url" download><span>{{ downloadLabels[item.id] || item.id }}</span><span>{{ number(item.registros) }} registros · {{ number(item.tamanho_bytes / 1024 / 1024) }} MB <ceara-icon name="arrow-up-right" [size]="15" /></span></a> }
+        @if (!downloads().length && !downloadError()) { <p class="help-text">Downloads ainda não preparados. Reprocesse esta UF abaixo para gerar os arquivos.</p> }
+      </div>
+    }
+  </div>
+  <div class="base-info">
+    @if (base().hospedagem_publica) {
+      <h2>Versão pública do Ceará</h2><p>A navegação e as consultas estão limitadas ao Ceará. Nomes, contatos, bairro e endereço são removidos da base, da interface e dos arquivos publicados.</p>
+      <div class="base-provenance"><h3>Executar no seu computador</h3><p>O código está disponível no GitHub. Na versão local você pode baixar qualquer uma das 27 UFs e usar sua própria chave do Gemini. O banco e as chaves não acompanham o clone.</p><a class="text-button" [href]="repositoryUrl + '#executar-localmente'" target="_blank" rel="noopener noreferrer">Código e instruções locais <ceara-icon name="arrow-up-right" [size]="15" /></a></div>
+    } @else {
+      <h2>Baixar estados</h2><p>Selecione as UFs que deseja preparar, como no Garimpo. O cadastro nacional é baixado uma vez por coleta; cada estado ganha uma base local e arquivos para download. Reserve espaço para o cadastro e o processamento temporário.</p>
+      <div class="collection-actions"><button class="text-button" (click)="selectAll()" [disabled]="collection.state().status === 'rodando'">Selecionar as 27 UFs</button><button class="text-button" (click)="selected.set([])" [disabled]="collection.state().status === 'rodando'">Limpar seleção</button></div>
+      <fieldset class="state-selection" [disabled]="collection.starting() || collection.state().status === 'rodando'"><legend class="sr-only">Estados para baixar</legend>
+        @for (state of store.ufs(); track state.uf) { <label><input type="checkbox" [checked]="selected().includes(state.uf)" (change)="toggle(state.uf)" /><span>{{ state.uf }} · {{ state.nome }}<small>{{ state.disponivel ? 'Base disponível' : 'Ainda não baixado' }}</small></span></label> }
+      </fieldset>
+      <label class="reuse-option"><input type="checkbox" [ngModel]="reuse()" (ngModelChange)="reuse.set($event)" [disabled]="collection.state().status === 'rodando'" />Reaproveitar os recortes já baixados, sem novo download</label>
+      <button class="button" [disabled]="!selected().length || collection.starting() || collection.state().status === 'rodando'" (click)="collection.start(selected(), reuse())">{{ collection.starting() || collection.state().status === 'rodando' ? 'Coleta em andamento…' : 'Baixar ' + selected().length + ' estado(s)' }}</button>
+      @if (collection.error()) { <p class="inline-error" role="alert">{{ collection.error() }}</p><button class="text-button" (click)="collection.refresh()">Atualizar acompanhamento</button> }
+      @if (collection.state().status !== 'ocioso') { <p role="status">{{ collection.state().status === 'concluido' ? 'Coleta concluída. As bases estão disponíveis no seletor de estados.' : collection.state().status === 'erro' ? 'A coleta não foi concluída. Confira o log abaixo.' : 'Preparando ' + collection.state().ufs.join(', ') + '. Você pode navegar enquanto a coleta continua.' }}</p><pre class="collection-log" aria-label="Log da coleta">{{ collection.state().linhas.join('\n') }}</pre> }
+    }
+    <div class="base-provenance"><h3>Assistente Gemini</h3><p>{{ base().ia_configurada ? 'Gemini disponível nesta aplicação.' : 'O assistente ainda não está configurado.' }}</p><p>{{ base().hospedagem_publica ? 'Esta versão usa a chave do responsável, guardada no servidor. Visitantes não precisam fornecer uma chave.' : 'Configure sua própria GEMINI_API_KEY no arquivo .env e reinicie a aplicação. A chave fica no servidor local e não acompanha o código distribuído.' }}</p><p class="help-text">O Gemini recebe perguntas, histórico, estatísticas e categorias. Registros individuais são exibidos na aplicação. Não inclua dados pessoais ou confidenciais.</p></div>
+  </div>
+</section>

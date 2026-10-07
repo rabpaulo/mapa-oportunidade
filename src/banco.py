@@ -192,7 +192,21 @@ def _sem_ligacoes(chave):
     return " ".join(p for p in chave.split() if p not in LIGACOES)
 
 
-def aplicar_codigos_ibge(conn, mapa_nome_para_codigo, log=print):
+# Divergências verificadas entre o nome da Receita e o cadastro do IBGE.
+# O alias só vale dentro da UF; não usamos aproximação de nomes.
+MUNICIPAL_ALIASES = {
+    'BA': {'santa teresinha': 'santa terezinha'},
+    'MG': {'brasopolis': 'brazopolis'},
+    'PA': {'santa isabel do para': 'santa izabel do para'},
+    'RJ': {'parati': 'paraty'},
+    'RN': {'ares': 'arez', 'boa saude': 'januario cicco'},
+    'RR': {'sao luiz': 'sao luiz do anaua'},
+    'RS': {'santana do livramento': 'sant ana do livramento'},
+    'TO': {'fortaleza do tabocao': 'tabocao', 'sao valerio da natividade': 'sao valerio'},
+}
+
+
+def aplicar_codigos_ibge(conn, mapa_nome_para_codigo, log=print, uf=''):
     """Casa o municipio da Receita com o codigo do IBGE, pelo nome sem acento.
 
     Os dois cadastros usam codigos proprios e incompativeis, e so o do IBGE
@@ -204,7 +218,8 @@ def aplicar_codigos_ibge(conn, mapa_nome_para_codigo, log=print):
     for linha in conn.execute("SELECT cod_municipio, nome FROM municipios").fetchall():
         chave = chave_busca(linha["nome"])
         codigo = (mapa_nome_para_codigo.get(chave)
-                  or frouxo.get(_sem_ligacoes(chave)))
+                  or frouxo.get(_sem_ligacoes(chave))
+                  or mapa_nome_para_codigo.get(MUNICIPAL_ALIASES.get(uf, {}).get(chave, '')))
         if codigo:
             conn.execute("UPDATE municipios SET codigo_ibge = ? "
                          "WHERE cod_municipio = ?", (codigo, linha["cod_municipio"]))
@@ -212,6 +227,9 @@ def aplicar_codigos_ibge(conn, mapa_nome_para_codigo, log=print):
         else:
             perdidos += 1
             log(f"    sem codigo IBGE: {linha['nome']!r}")
+    conn.execute("INSERT OR REPLACE INTO meta VALUES('municipios_sem_malha',?)", (str(perdidos),))
+    sem_malha = conn.execute("SELECT COALESCE(SUM(contatos),0) FROM municipios WHERE codigo_ibge IS NULL OR codigo_ibge=''").fetchone()[0]
+    conn.execute("INSERT OR REPLACE INTO meta VALUES('contatos_sem_malha',?)", (str(sem_malha),))
     conn.commit()
     log(f"  {casados} municipios com codigo IBGE, {perdidos} sem")
     return casados, perdidos

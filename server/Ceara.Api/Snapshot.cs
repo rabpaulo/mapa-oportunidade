@@ -17,7 +17,8 @@ public static class Snapshot
         var manifestPath = configuration["CEARA_SNAPSHOT_MANIFEST"] ?? Path.Combine(Path.GetDirectoryName(archive)!, "snapshot.json");
         var manifest = JsonSerializer.Deserialize<Manifest>(await File.ReadAllTextAsync(manifestPath), WireJson.Options)
             ?? throw new InvalidDataException("Manifesto da base ausente.");
-        if (manifest.Files.Count != RequiredFiles.Length || RequiredFiles.Any(name => !manifest.Files.ContainsKey(name)))
+        if (manifest.Files.Count < RequiredFiles.Length || manifest.Files.Count > 11 || RequiredFiles.Any(name => !manifest.Files.ContainsKey(name))
+            || manifest.Files.Keys.Any(name => !RequiredFiles.Contains(name) && !System.Text.RegularExpressions.Regex.IsMatch(name, @"^uf/CE/downloads/[a-f0-9]{24}/(catalogo\.json|contatos\.db|contatos\.csv\.gz|municipios\.csv\.gz|segmentos\.csv\.gz|metadados\.json|malha_23\.geojson|malha_br\.geojson)$")))
             throw new InvalidDataException("O snapshot deve conter o banco CE e as duas malhas.");
         using (var stream = File.OpenRead(archive))
             if (!EqualsHash(Convert.ToHexString(await SHA256.HashDataAsync(stream)), manifest.ArchiveSha256))
@@ -54,7 +55,7 @@ public static class Snapshot
                         throw new InvalidDataException("O checksum de um arquivo da base é inválido.");
                 if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.GroupRead);
             }
-            if (!seen.SetEquals(RequiredFiles)) throw new InvalidDataException("O snapshot está incompleto.");
+            if (!seen.SetEquals(manifest.Files.Keys)) throw new InvalidDataException("O snapshot está incompleto.");
             var stagingConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["CEARA_DATA_DIR"] = staging, ["CEARA_PUBLIC"] = configuration["CEARA_PUBLIC"],
@@ -62,6 +63,7 @@ public static class Snapshot
             }).Build();
             var stagedDatabase = new Database(stagingConfig);
             stagedDatabase.ValidateSnapshot();
+            if (stagedDatabase.Restricted) new Downloads(stagedDatabase).Validate();
             var meta = stagedDatabase.Metadata();
             if (manifest.Version != $"{meta["versao_receita"]}/{meta["gerado_em"]}")
                 throw new InvalidDataException("A versão da base não corresponde ao manifesto.");

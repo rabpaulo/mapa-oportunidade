@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Coleta o cadastro CNPJ e guarda somente o Ceará.
+"""Coleta estabelecimentos ativos em uma ou mais UFs, em uma passagem nacional.
 
 Uso:
     python src/ingestar_receita.py --uf CE --dados /pasta/temporaria
@@ -7,14 +7,13 @@ Uso:
 Escreve receita/estabelecimentos_ce.csv.gz e empresas_ce.csv.gz.
 
 Os arquivos da Receita sao nacionais, nao ha download por estado. Cada ZIP
-e baixado, lido em blocos e apagado; somente estabelecimentos ativos do CE e
-as empresas correspondentes sao gravados. A CLI e restrita a CE.
+e baixado, lido em blocos e apagado; somente estabelecimentos ativos das UFs selecionadas e
+as empresas correspondentes sao gravados. Ceara e o padrao.
 
 As linhas sao gravadas conforme saem do parser: guardar os milhoes de
 estabelecimentos em memoria nao caberia na RAM.
 
-Para coletar e publicar o SQLite com seguranca, use scripts/coletar.py ou a
-aba Base. Este modulo de ingestao escreve diretamente no destino informado.
+Para coletar e publicar o SQLite com seguranca, use scripts/coletar.py. Este modulo de ingestao escreve diretamente no destino informado.
 """
 
 import argparse
@@ -25,8 +24,9 @@ import os
 import sys
 import time
 import zipfile
-from array import array
-from bisect import bisect_left
+import sqlite3
+import tempfile
+from geografia import UFS
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -83,162 +83,121 @@ def caminho_empresas(uf):
     return os.path.join(DESTINO, f"empresas_{uf.lower()}.csv.gz")
 
 
+class BasicIndex:
+    """Índice em disco; CNPJ permanece texto inclusive no formato alfanumérico."""
+    def __init__(self):
+        self.folder = tempfile.TemporaryDirectory(prefix='.cnpj-index-', dir=_tmpdir())
+        self.conn = sqlite3.connect(os.path.join(self.folder.name, 'alvos.db'))
+        self.conn.executescript("PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-32768; CREATE TABLE alvos (basico TEXT, uf TEXT, PRIMARY KEY(basico,uf)) WITHOUT ROWID; CREATE TEMP TABLE candidatos (basico TEXT PRIMARY KEY) WITHOUT ROWID;")
+        self.batch = []
+
+    def add(self, basic, uf):
+        self.batch.append((basic, uf))
+        if len(self.batch) >= 20000:
+            self.flush()
+
+    def flush(self):
+        self.conn.executemany('INSERT OR IGNORE INTO alvos VALUES (?,?)', self.batch)
+        self.conn.commit()
+        self.batch.clear()
+
+    def targets(self, rows):
+        self.conn.execute('DELETE FROM candidatos')
+        self.conn.executemany('INSERT OR IGNORE INTO candidatos VALUES (?)', ((basic,) for basic in rows))
+        return self.conn.execute('SELECT a.basico,a.uf FROM candidatos c CROSS JOIN alvos a ON a.basico=c.basico')
+
+    def close(self):
+        self.conn.close()
+        self.folder.cleanup()
+
+
 def baixar_estabelecimentos(versao, ufs, blocos=10, log=print):
-    """Uma passada pelos blocos, alimentando o arquivo de cada UF.
-
-    Devolve {uf: set de CNPJ basicos}, que a etapa de Empresas usa para saber
-    quais razoes sociais interessam.
-
-    `blocos` existe para conferir o resultado com um bloco so, sem esperar os
-    5,3 GB dos dez.
-    """
     os.makedirs(DESTINO, exist_ok=True)
-    tmp = _tmpdir()
     arquivos, escritores = {}, {}
     totais = {uf: 0 for uf in ufs}
-    basicos = {uf: set() for uf in ufs}
-
+    basicos = BasicIndex()
     try:
         for uf in ufs:
-            fh = gzip.open(caminho_estabelecimentos(uf), "wt",
-                           encoding="utf-8", newline="")
-            arquivos[uf] = fh
-            escritores[uf] = csv.writer(fh)
+            arquivos[uf] = gzip.open(caminho_estabelecimentos(uf), 'wt', encoding='utf-8', newline='')
+            escritores[uf] = csv.writer(arquivos[uf])
             escritores[uf].writerow(COLUNAS)
-
         for i in range(blocos):
-            nome = f"Estabelecimentos{i}.zip"
-            caminho = os.path.join(tmp, nome)
-            t0 = time.time()
-            log(f"  [{i+1}/{blocos}] {nome}", flush=True)
+            nome = f'Estabelecimentos{i}.zip'
+            caminho = os.path.join(_tmpdir(), nome)
+            antes = dict(totais)
+            log(f'  [{i+1}/{blocos}] {nome}', flush=True)
             try:
-                receita._baixar(f"{receita.ESPELHO}/{versao}/{nome}", caminho, log=log)
-                antes = dict(totais)
+                receita._baixar(f'{receita.ESPELHO}/{versao}/{nome}', caminho, log=log)
                 for linha in receita._linhas_do_zip(caminho, ufs):
                     c = receita._converter(linha)
-                    if not c:
+                    if not c or c[receita.UF] not in escritores or c[receita.SITUACAO] != receita.ATIVA:
                         continue
                     uf = c[receita.UF]
-                    if uf not in escritores:
-                        continue
-                    if c[receita.SITUACAO] != receita.ATIVA:
-                        continue
                     escritores[uf].writerow(_linha_saida(c))
-                    basicos[uf].add(int(c[receita.CNPJ_BASICO]))
+                    basicos.add(c[receita.CNPJ_BASICO], uf)
                     totais[uf] += 1
-                ganho = ", ".join(f"{uf} +{totais[uf]-antes[uf]}" for uf in ufs)
-                log(f"      {ganho} ({time.time()-t0:.0f}s)", flush=True)
+                basicos.flush()
+                log('      ' + ', '.join(f'{uf} +{totais[uf]-antes[uf]}' for uf in ufs), flush=True)
             finally:
                 if os.path.exists(caminho):
                     os.remove(caminho)
+    except BaseException:
+        basicos.close()
+        raise
     finally:
         for fh in arquivos.values():
             fh.close()
-
-    for uf in ufs:
-        log(f"  {totais[uf]} estabelecimentos ativos em {uf}")
     return basicos, totais
 
 
-def _indice(conjunto):
-    """Conjunto de basicos -> array ordenado, para consulta com pouca memoria.
-
-    Um set de milhoes de inteiros do Python passa de 200 MB por estado; o mesmo
-    conteudo como array de 32 bits cabe em poucas dezenas.
-    """
-    vetor = array("I", sorted(conjunto))
-    return vetor
-
-
-def _contem(vetor, valor):
-    i = bisect_left(vetor, valor)
-    return i < len(vetor) and vetor[i] == valor
-
-
 def baixar_empresas(versao, basicos, ufs, blocos=10, log=print):
-    """Razao social, natureza, porte e capital, tambem numa passada so."""
-    tmp = _tmpdir()
-    indices = {uf: _indice(basicos[uf]) for uf in ufs}
-    for uf in ufs:
-        basicos[uf].clear()
-
     arquivos, escritores = {}, {}
     achados = {uf: 0 for uf in ufs}
     try:
+        basicos.flush()
         for uf in ufs:
-            fh = gzip.open(caminho_empresas(uf), "wt", encoding="utf-8", newline="")
-            arquivos[uf] = fh
-            escritores[uf] = csv.writer(fh)
-            escritores[uf].writerow(["cnpj_basico", "razao_social", "natureza",
-                                     "qualificacao", "capital_social", "porte"])
-
+            arquivos[uf] = gzip.open(caminho_empresas(uf), 'wt', encoding='utf-8', newline='')
+            escritores[uf] = csv.writer(arquivos[uf])
+            escritores[uf].writerow(['cnpj_basico', 'razao_social', 'natureza', 'qualificacao', 'capital_social', 'porte'])
         for i in range(blocos):
-            nome = f"Empresas{i}.zip"
-            caminho = os.path.join(tmp, nome)
-            t0 = time.time()
-            log(f"  [{i+1}/{blocos}] {nome}", flush=True)
+            nome = f'Empresas{i}.zip'
+            caminho = os.path.join(_tmpdir(), nome)
+            log(f'  [{i+1}/{blocos}] {nome}', flush=True)
             try:
-                receita._baixar(f"{receita.ESPELHO}/{versao}/{nome}", caminho, log=log)
-                antes = dict(achados)
-                with zipfile.ZipFile(caminho) as zf:
-                    with zf.open(zf.namelist()[0]) as bruto:
-                        resto = b""
-                        while True:
-                            bloco = bruto.read(1 << 22)
-                            if not bloco:
-                                if not resto:
-                                    break
-                                linhas, resto = [resto], b""
-                            else:
-                                bloco = resto + bloco
-                                linhas = bloco.split(b"\n")
-                                resto = linhas.pop()
-                            for linha in linhas:
-                                # O CNPJ basico sao os 8 digitos logo apos a
-                                # primeira aspa: da para descartar a maioria
-                                # das linhas sem separar campo a campo.
-                                if len(linha) < 12:
-                                    continue
-                                try:
-                                    basico = int(linha[1:9])
-                                except ValueError:
-                                    continue
-                                alvos = [uf for uf in ufs
-                                         if _contem(indices[uf], basico)]
-                                if not alvos:
-                                    continue
-                                c = receita._converter(linha, minimo=6)
-                                if not c:
-                                    continue
-                                for uf in alvos:
-                                    escritores[uf].writerow(c[:6])
-                                    achados[uf] += 1
-                ganho = ", ".join(f"{uf} +{achados[uf]-antes[uf]}" for uf in ufs)
-                log(f"      {ganho} ({time.time()-t0:.0f}s)", flush=True)
+                receita._baixar(f'{receita.ESPELHO}/{versao}/{nome}', caminho, log=log)
+                with zipfile.ZipFile(caminho) as zf, zf.open(zf.namelist()[0]) as bruto:
+                    rows = {}
+                    def write_batch():
+                        for basic, uf in basicos.targets(rows):
+                            c = receita._converter(rows[basic], minimo=6)
+                            if c:
+                                escritores[uf].writerow(c[:6])
+                                achados[uf] += 1
+                        rows.clear()
+                    for linha in bruto:
+                        if len(linha) >= 12:
+                            basic = linha[1:9].decode('latin-1')
+                            rows[basic] = linha.rstrip(b'\r\n')
+                        if len(rows) >= 20000:
+                            write_batch()
+                    if rows:
+                        write_batch()
             finally:
                 if os.path.exists(caminho):
                     os.remove(caminho)
+            log('      ' + ', '.join(f'{uf}: {achados[uf]} empresas' for uf in ufs), flush=True)
     finally:
         for fh in arquivos.values():
             fh.close()
-
-    for uf in ufs:
-        log(f"  {achados[uf]}/{len(indices[uf])} razoes sociais em {uf}")
+        basicos.close()
     return achados
 
 
-def basicos_do_arquivo(uf, log=print):
-    """CNPJ basicos ja gravados, para refazer so a etapa de Empresas."""
-    caminho = caminho_estabelecimentos(uf)
-    basicos = set()
-    with gzip.open(caminho, "rt", encoding="utf-8") as fh:
-        leitor = csv.reader(fh)
-        next(leitor, None)
-        for linha in leitor:
-            if linha:
-                basicos.add(int(linha[0][:8]))
-    log(f"  {len(basicos)} CNPJ basicos lidos de {os.path.basename(caminho)}")
-    return basicos
+def basicos_do_arquivo(uf, index):
+    with gzip.open(caminho_estabelecimentos(uf), 'rt', encoding='utf-8') as fh:
+        for row in csv.DictReader(fh):
+            index.add(row['cnpj'][:8], uf)
+    index.flush()
 
 
 def registrar_versao(uf, versao, estabelecimentos, log=print):
@@ -260,8 +219,8 @@ def registrar_versao(uf, versao, estabelecimentos, log=print):
 
 def main():
     ap = argparse.ArgumentParser(description="Ingestao dos Dados Abertos de CNPJ")
-    ap.add_argument("--uf", nargs="+", default=["CE"], choices=["CE"],
-                    help="recorte fixo do Ceara")
+    ap.add_argument("--uf", nargs="+", default=["CE"], type=str.upper, choices=sorted(UFS),
+                    help="uma ou mais UFs; um único download nacional")
     ap.add_argument("--pular-empresas", action="store_true")
     ap.add_argument("--somente-empresas", action="store_true",
                     help="reaproveita o arquivo de estabelecimentos ja baixado")
@@ -283,13 +242,21 @@ def main():
         usar_pasta_dados(args.dados)
 
     inicio = time.time()
-    versao = receita.ultima_versao()
+    if args.somente_empresas:
+        versions = [json.load(open(os.path.join(DESTINO, f'_versao_{uf.lower()}.json')))['versao_receita'] for uf in ufs]
+        if len(set(versions)) != 1:
+            raise ValueError('As UFs precisam pertencer à mesma versão da Receita.')
+        versao = versions[0]
+    else:
+        versao = receita.ultima_versao()
     print(f"  estados: {', '.join(ufs)}")
     print(f"  dados em: {DADOS}")
 
     if args.somente_empresas:
         print("\nEmpresas (CNPJs lidos dos arquivos existentes):")
-        basicos = {uf: basicos_do_arquivo(uf) for uf in ufs}
+        basicos = BasicIndex()
+        for uf in ufs:
+            basicos_do_arquivo(uf, basicos)
         baixar_empresas(versao, basicos, ufs)
         print(f"\nConcluido em {(time.time()-inicio)/60:.1f} min")
         return 0
@@ -312,6 +279,8 @@ def main():
     if not args.pular_empresas:
         print("\nEmpresas:")
         baixar_empresas(versao, basicos, ufs)
+    else:
+        basicos.close()
 
     print(f"\nConcluido em {(time.time()-inicio)/60:.1f} min")
     print(f"Agora rode: " + "; ".join(

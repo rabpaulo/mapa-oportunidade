@@ -1,10 +1,13 @@
 import { expect, test } from '@playwright/test';
+import { enterProject } from './helpers';
 
-test('mapa real, seleção de município e persistência dos temas', async ({ page }) => {
+test('mapa real, seleção de município e persistência dos temas', async ({ page, request }) => {
+  const info = await (await request.get('/api/base')).json();
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto('/');
-  await expect(page.getByText('680.298', { exact: true })).toBeVisible();
+  await enterProject(page);
+  await expect(page.getByText(new Intl.NumberFormat('pt-BR').format(info.contatos), { exact: true })).toBeVisible();
   await expect(page.locator('.map-canvas canvas')).toBeVisible();
   expect((await page.locator('.map-canvas').boundingBox())?.height).toBeGreaterThan(400);
   await expect(page.locator('.map-status')).toHaveCount(0);
@@ -17,10 +20,12 @@ test('mapa real, seleção de município e persistência dos temas', async ({ pa
   await page.getByRole('button', { name: 'Ativar tema claro' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-tema', 'claro');
   await page.reload();
+  await enterProject(page);
   await expect(page.locator('html')).toHaveAttribute('data-tema', 'claro');
   await page.getByRole('button', { name: 'Ativar tema escuro' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-tema', 'escuro');
   await page.reload();
+  await enterProject(page);
   await expect(page.locator('html')).toHaveAttribute('data-tema', 'escuro');
   expect(errors).toEqual([]);
 });
@@ -30,6 +35,7 @@ test('mapa offline preserva seleção, comparação e acesso às empresas', asyn
   page.on('pageerror', error => errors.push(error.message));
   await page.route('https://tiles.openfreemap.org/**', route => route.abort());
   await page.goto('/');
+  await enterProject(page);
   await expect(page.locator('.map-status')).toHaveCount(0);
   await expect(page.locator('.map-source')).toContainText('ruas indisponíveis');
   await page.getByRole('button', { name: 'Mapa offline', exact: true }).click();
@@ -59,6 +65,7 @@ test('falha dos tiles de ruas mantém a malha local utilizável', async ({ page 
   page.on('pageerror', error => errors.push(error.message));
   await page.route('https://tiles.openfreemap.org/planet', route => route.fulfill({ status: 503, body: 'Mapa de ruas indisponível' }));
   await page.goto('/');
+  await enterProject(page);
   await expect(page.locator('.map-source')).toContainText('ruas indisponíveis');
   await expect(page.locator('.map-status')).toHaveCount(0);
   await page.getByRole('button', { name: 'Selecionar Fortaleza', exact: true }).click();
@@ -68,8 +75,9 @@ test('falha dos tiles de ruas mantém a malha local utilizável', async ({ page 
   expect(errors).toEqual([]);
 });
 
-test('filtros, detalhes e paginação sem controles de exportação', async ({ page }) => {
+test('filtros, detalhes e paginação com download do recorte', async ({ page }) => {
   await page.goto('/');
+  await enterProject(page);
   await page.getByRole('navigation').getByRole('button', { name: 'Empresas', exact: true }).click();
   await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
   await page.getByLabel('Buscar empresas').fill('padaria');
@@ -92,14 +100,16 @@ test('filtros, detalhes e paginação sem controles de exportação', async ({ p
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(company).toBeFocused();
   await expect(page.locator('.contacts-table input[type="checkbox"]')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Exportar/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Baixar recorte CSV', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Próxima página', exact: true }).click();
   await expect(page.locator('.pagination')).toContainText('Página 2');
   await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
 });
 
-test('ramos abrem um recorte e Base mostra somente origem e versão', async ({ page }) => {
+test('ramos abrem um recorte e Base mostra origem e versão', async ({ page, request }) => {
+  const info = await (await request.get('/api/base')).json();
   await page.goto('/');
+  await enterProject(page);
   await page.getByRole('navigation').getByRole('button', { name: 'Ramos', exact: true }).click();
   await page.getByLabel('Buscar ramo').fill('padaria');
   await expect(page.locator('.segments-table tbody tr')).toHaveCount(1);
@@ -107,22 +117,25 @@ test('ramos abrem um recorte e Base mostra somente origem e versão', async ({ p
   await expect(page.locator('.active-filters')).toContainText('Padaria e confeitaria');
   await expect(page.locator('.contacts-table tbody tr')).toHaveCount(50);
   await page.getByRole('navigation').getByRole('button', { name: 'Base', exact: true }).click();
-  await expect(page.locator('.base-facts')).toContainText('680.298');
-  await expect(page.locator('.base-facts')).toContainText('14/09/2026');
-  await expect(page.getByRole('button', { name: /Regenerar|Atualizar|Baixar/i })).toHaveCount(0);
-  await expect(page.locator('.base-layout input, .base-layout textarea')).toHaveCount(0);
-  await expect(page.locator('.base-provenance')).toContainText(['Dados Abertos CNPJ', 'O Gemini recebe']);
+  await expect(page.locator('.base-facts')).toContainText(new Intl.NumberFormat('pt-BR').format(info.contatos));
+  await expect(page.locator('.base-facts')).toContainText(info.versao_receita.split('-').reverse().join('/'));
+  await expect(page.getByRole('heading', { name: 'Baixar estados', exact: true })).toBeVisible();
+  await expect(page.locator('.state-selection input')).toHaveCount(27);
+  await expect(page.locator('.base-provenance').first()).toContainText('Dados Abertos CNPJ');
+  await expect(page.locator('.base-layout')).toContainText('O Gemini recebe');
+  await expect(page.locator('.download-item')).toHaveCount(7);
 });
 
 test('assistente aceita conversa geral, preserva a sessão e mostra análises', async ({ page }) => {
   const requests: unknown[] = [];
-  await page.route('**/api/chat', async route => {
+  await page.route('**/api/chat?*', async route => {
     const body = route.request().postDataJSON(); requests.push(body);
     await route.fulfill({ json: { texto: 'Podemos organizar uma pesquisa de mercado. Fortaleza tem 316.136 empresas nesta base.',
       resultados: [{ tipo: 'analise', titulo: 'Comparação', filtros: { cidade: '', cidades: [], segmento: '', segmentos: [], termo: '', porte: '', bairro: '', ano_minimo: null, ano_maximo: null, score_minimo: 0, somente_celular: false, somente_email: false, somente_sem_dominio: false, ordem: 'score' }, agrupar_por: ['cidade'], itens: [{ cidade: 'Fortaleza', contatos: 316136, com_celular: 0, com_email: 0, score_medio: 64 }] }],
       fontes: [{ fonte: 'Receita Federal — recorte CE', versao: '2026-09-14', filtros: { cidade: '', cidades: [], segmento: '', segmentos: [], termo: '', porte: '', bairro: '', ano_minimo: null, ano_maximo: null, score_minimo: 0, somente_celular: false, somente_email: false, somente_sem_dominio: false, ordem: 'score' } }], modelo: 'gemini-simulado' } });
   });
   await page.goto('/');
+  await enterProject(page);
   await page.getByRole('navigation').getByRole('button', { name: 'Assistente', exact: true }).click();
   await page.getByLabel('Sua pergunta').fill('Me ajude a planejar uma pesquisa.');
   await page.getByRole('button', { name: 'Enviar pergunta', exact: true }).click();
@@ -141,8 +154,9 @@ test('assistente aceita conversa geral, preserva a sessão e mostra análises', 
 });
 
 test('erro de quota da IA é claro e empresas continuam disponíveis', async ({ page }) => {
-  await page.route('**/api/chat', route => route.fulfill({ status: 429, json: { detail: 'A cota gratuita do Gemini foi atingida. Aguarde e tente novamente.' } }));
+  await page.route('**/api/chat?*', route => route.fulfill({ status: 429, json: { detail: 'A cota gratuita do Gemini foi atingida. Aguarde e tente novamente.' } }));
   await page.goto('/');
+  await enterProject(page);
   await page.getByRole('navigation').getByRole('button', { name: 'Assistente', exact: true }).click();
   await page.getByLabel('Sua pergunta').fill('Olá');
   await page.getByRole('button', { name: 'Enviar pergunta', exact: true }).click();
@@ -153,7 +167,7 @@ test('erro de quota da IA é claro e empresas continuam disponíveis', async ({ 
 
 test('pergunta bloqueada mostra o motivo e não contamina o histórico', async ({ page }) => {
   const requests: { pergunta: string; historico: unknown[] }[] = [];
-  await page.route('**/api/chat', async route => {
+  await page.route('**/api/chat?*', async route => {
     const body = route.request().postDataJSON(); requests.push(body);
     if (body.pergunta.includes('@')) {
       await route.fulfill({ status: 422, json: { detail: 'O filtro de privacidade bloqueou a pergunta ou o histórico. Remova dados pessoais.' } });
@@ -162,6 +176,7 @@ test('pergunta bloqueada mostra o motivo e não contamina o histórico', async (
     }
   });
   await page.goto('/');
+  await enterProject(page);
   await page.getByRole('navigation').getByRole('button', { name: 'Assistente', exact: true }).click();
   await page.getByLabel('Sua pergunta').fill('Meu e-mail é pessoa@example.invalid');
   await page.getByRole('button', { name: 'Enviar pergunta', exact: true }).click();
@@ -174,14 +189,17 @@ test('pergunta bloqueada mostra o motivo e não contamina o histórico', async (
   expect(requests[1].historico).toEqual([]);
 });
 
-test('layout móvel, filtros recolhidos e captura das telas', async ({ page }) => {
+test('layout móvel, filtros recolhidos e captura das telas', async ({ page, request }) => {
+  const info = await (await request.get('/api/base')).json();
   await page.goto('/');
+  await enterProject(page);
   await expect(page.locator('.map-canvas canvas')).toBeVisible();
   await expect(page.locator('.map-status')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/mapa-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await expect(page.getByText('680.298', { exact: true })).toBeVisible();
+  await enterProject(page);
+  await expect(page.getByText(new Intl.NumberFormat('pt-BR').format(info.contatos), { exact: true })).toBeVisible();
   await expect(page.locator('.map-canvas canvas')).toBeVisible();
   await expect(page.locator('.map-status')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/mapa-mobile.png', fullPage: true });

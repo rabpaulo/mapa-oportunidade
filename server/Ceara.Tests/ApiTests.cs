@@ -71,6 +71,23 @@ public sealed class ApiTests
         Directory.CreateDirectory(Path.Combine(host.DirectoryPath, "ibge")); await File.WriteAllTextAsync(Path.Combine(host.DirectoryPath, "ibge", "malha_23.geojson"), "{\"type\":\"FeatureCollection\",\"features\":[]}");
         var geo = await client.GetAsync("/api/malhas/malha_23.geojson"); Assert.Equal("application/geo+json", geo.Content.Headers.ContentType?.MediaType);
     }
+    [Fact] public async Task FacetsIncludeEveryMunicipalityWithAndWithoutContactFilters()
+    {
+        using var host = new TestHost();
+        host.Sql("""
+            WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<201)
+            INSERT INTO contatos(cnpj,nome,cidade,cod_municipio,segmento,score,email,tem_celular,dominio_proprio)
+            SELECT printf('%014d',x),'Empresa',printf('Cidade %03d',x),printf('%04d',x),'Ramo de teste',50,'teste@example.invalid',0,1 FROM n;
+            INSERT INTO municipios SELECT cod_municipio,'2300000',cidade,'CE',COUNT(*),COUNT(*),0,0,50 FROM contatos WHERE segmento='Ramo de teste' GROUP BY cidade;
+            """);
+        using var client = host.CreateClient();
+        var all = await Post(client,"facetas",new{});
+        Assert.Equal(204,all.GetProperty("municipios").GetArrayLength());
+        Assert.Equal(100,all.GetProperty("municipios")[0].GetProperty("percentual_com_email").GetInt32());
+        var filtered = await Post(client,"facetas",new { somente_email=true });
+        Assert.Equal(203,filtered.GetProperty("municipios").GetArrayLength());
+        Assert.Contains(filtered.GetProperty("municipios").EnumerateArray(),row=>row.GetProperty("nome").GetString()=="Cidade 201");
+    }
     [Theory] [InlineData("missing")] [InlineData("foreign")] [InlineData("broken")]
     public async Task MissingAndInvalidDatabaseFailClearly(string mode)
     {
@@ -106,7 +123,7 @@ public sealed class ApiTests
     }
     [Fact] public async Task VercelPreviewUsesTheForwardedHttpsOrigin()
     {
-        using var host = new TestHost(); host.Settings["VERCEL"] = "1";
+        using var host = new TestHost(); host.MakePublic(); host.Settings["VERCEL"] = "1";
         using var client = host.CreateClient(new() { BaseAddress = new Uri("http://internal:8080") });
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/contatos/buscar") { Content = JsonContent.Create(new { }) };
         request.Headers.Add("Origin", "https://preview.vercel.app");

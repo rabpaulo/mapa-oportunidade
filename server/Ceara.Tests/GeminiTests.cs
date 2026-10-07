@@ -7,6 +7,26 @@ namespace Ceara.Tests;
 
 public sealed class GeminiTests
 {
+    [Fact] public async Task PublicToolsUseOnlyMinimizedFieldsAndReturnMinimizedCompanies()
+    {
+        using var host = new TestHost(); host.MakePublic();
+        host.Respond("[{\"functionCall\":{\"name\":\"buscar_empresas\",\"args\":{\"filtros\":{},\"limite\":2}}}]");
+        host.Respond("[{\"text\":\"Veja as empresas na tabela.\"}]");
+        using var client = host.CreateClient(); var response = await Chat(client); response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var company = result.GetProperty("resultados")[0].GetProperty("itens")[0];
+        Assert.Equal(9, company.EnumerateObject().Count()); Assert.False(company.TryGetProperty("nome", out _));
+        foreach (var payload in host.Requests)
+        {
+            var schema = payload.GetProperty("tools").ToString();
+            foreach (var field in new[] { "bairro", "somente_email", "somente_celular", "sem_dominio", "com_email", "com_celular" }) Assert.DoesNotContain(field, schema);
+            Assert.DoesNotContain("simulated-key", payload.ToString());
+        }
+        Assert.DoesNotContain(company.GetProperty("cnpj").GetString()!, host.Requests[1].ToString());
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/chat?uf=SP", new { pergunta = "Compare municípios" })).StatusCode);
+        Assert.Equal(2, host.Requests.Count);
+    }
+
     private static Task<HttpResponseMessage> Chat(HttpClient client) => client.PostAsJsonAsync("/api/chat", new { pergunta = "Encontre padarias" });
     [Fact] public async Task ToolCallsEchoSignaturesButNeverSendIndividualContacts()
     {
@@ -28,6 +48,9 @@ public sealed class GeminiTests
     {
         using var host = new TestHost(); host.Respond("[{\"functionCall\":{\"name\":\"analisar_base\",\"args\":{\"agrupar_por\":[\"cidade\"]}}}]"); host.Respond("[{\"text\":\"Fortaleza lidera.\"}]");
         host.Sql("INSERT INTO contatos SELECT id+10, cnpj, nome, empresa, email, telefone, whatsapp, cidade, cod_municipio, bairro, endereco, segmento, oportunidade, porte, abertura, dominio_proprio, tem_celular, score, busca FROM contatos");
+        // A collected snapshot publishes contacts and their aggregates together.
+        foreach (var table in new[] { "municipios", "segmentos" })
+            host.Sql($"UPDATE {table} SET contatos=contatos*2, com_email=com_email*2, com_celular=com_celular*2, sem_dominio=sem_dominio*2");
         using var client = host.CreateClient(); var history = Enumerable.Range(0, 20).Select(i => new { role = i % 2 == 0 ? "user" : "model", text = "message-" + i }).ToArray();
         var response = await client.PostAsJsonAsync("/api/chat", new { pergunta = "Compare", historico = history }); response.EnsureSuccessStatusCode();
         Assert.Equal(13, host.Requests[0].GetProperty("contents").GetArrayLength());

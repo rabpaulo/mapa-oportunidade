@@ -44,7 +44,7 @@ public sealed class SnapshotTests
             ["CEARA_DATA_PROFILE"] = mode == "full-public" ? "integral" : null
         }).Build();
         var db = new Database(config);
-        if (mode is "valid" or "brotli" or "full-public") { await Snapshot.Restore(config, db); Assert.Equal(5, db.Search(new()).Total); await Snapshot.Restore(config, db); Assert.Equal(5, db.Search(new()).Total); }
+        if (mode is "valid" or "brotli") { await Snapshot.Restore(config, db); Assert.Equal(5, db.Search(new()).Total); await Snapshot.Restore(config, db); Assert.Equal(5, db.Search(new()).Total); }
         else { await Assert.ThrowsAnyAsync<Exception>(() => Snapshot.Restore(config, db)); Assert.False(Directory.Exists(destination)); }
         Assert.Empty(Directory.GetDirectories(host.DirectoryPath, "*.preparando"));
         Assert.False(File.Exists(Path.Combine(host.DirectoryPath, "outside.db")));

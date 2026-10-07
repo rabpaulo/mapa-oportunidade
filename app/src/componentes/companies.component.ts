@@ -1,10 +1,10 @@
-import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, DestroyRef, signal, untracked } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { catchError, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { ApiService } from '../lib/api.service';
 import { Store } from '../lib/store';
-import { emptyFilters, filterLabel, number, type Area, type Contact, type Filters, type PageContacts } from '../lib/api';
+import { emptyFilters, filterLabel, number, type Area, type Contact, type Filters, type PageContacts, contactLabel } from '../lib/api';
 import { IconComponent } from './icon.component';
 import { ContactDetailsComponent } from './contact-details.component';
 
@@ -18,7 +18,10 @@ export class CompaniesComponent {
   readonly segments = input.required<Area[]>();
   readonly generation = input<string>();
   readonly number = number;
-  readonly filterLabel = filterLabel;
+  readonly filterLabel = (filters: Filters) => filterLabel(filters, this.store.uf());
+  readonly contactLabel = contactLabel;
+  readonly exporting = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
   readonly data = signal<PageContacts>({ total: 0, itens: [] });
   readonly facets = signal<{ municipios: Area[]; segmentos: Area[] } | null>(null);
   readonly page = signal(1);
@@ -43,7 +46,7 @@ export class CompaniesComponent {
   readonly range = computed(() => this.data().total ? `${number((this.page() - 1) * this.size + 1)}–${number(Math.min(this.page() * this.size, this.data().total))} de ${number(this.data().total)}` : '0 resultados');
   readonly cities = computed(() => this.addMissing(this.facets()?.municipios ?? this.areas(), this.store.filters().cidade));
   readonly branches = computed(() => this.addMissing(this.facets()?.segmentos ?? this.segments(), this.store.filters().segmento));
-  private readonly query = computed(() => ({ filtros: this.store.filters(), pagina: this.page(), por_pagina: this.size, generation: this.generation() }));
+  private readonly query = computed(() => ({ filtros: this.store.filters(), pagina: this.page(), por_pagina: this.size, generation: this.generation(), uf: this.store.uf() }));
 
   constructor() {
     effect(() => {
@@ -66,6 +69,14 @@ export class CompaniesComponent {
   }
   private addMissing(list: Area[], value: string): Area[] {
     return value && !list.some(area => area.nome === value) ? [{ codigo: value, nome: value, contatos: 0, com_email: 0, com_celular: 0, sem_dominio: 0, score_medio: 0 }, ...list] : list;
+  }
+  exportCsv() {
+    const uf = this.store.uf();
+    this.exporting.set(true); this.error.set('');
+    this.api.download('contatos/exportar', this.store.filters()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: blob => { const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = uf.toLowerCase() + '-recorte.csv.gz'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10000); this.exporting.set(false); },
+      error: () => { this.error.set('Não foi possível exportar este recorte. Tente novamente.'); this.exporting.set(false); }
+    });
   }
   clear() { this.page.set(1); this.store.filters.set(emptyFilters()); }
   retry() { this.store.filters.update(filters => ({ ...filters })); }

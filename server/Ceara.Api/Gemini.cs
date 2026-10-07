@@ -8,7 +8,7 @@ namespace Ceara.Api;
 public sealed partial class Gemini(HttpClient http, Database database, IConfiguration config)
 {
     public const string DefaultModel = "gemini-3.5-flash-lite";
-    public bool Configured => config["CEARA_PUBLIC"] != "1" && !string.IsNullOrWhiteSpace(config["GEMINI_API_KEY"]);
+    public bool Configured => !string.IsNullOrWhiteSpace(config["GEMINI_API_KEY"]);
     public string Model => config["GEMINI_MODEL"]?.Trim() ?? DefaultModel;
     private static readonly string Prompt = Resource("Gemini.prompt.txt");
     private static readonly JsonNode Tools = JsonNode.Parse(Resource("Gemini.tools.json"))!;
@@ -21,6 +21,29 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
         return reader.ReadToEnd();
     }
     private static JsonNode? Node(object? value) => JsonSerializer.SerializeToNode(value, WireJson.Options);
+
+    private static JsonNode ToolSchema(bool restricted)
+    {
+        var tools = Tools.DeepClone();
+        if (!restricted) return tools;
+        foreach (var declaration in tools[0]!["functionDeclarations"]!.AsArray())
+        {
+            var parameters = declaration!["parameters"]!;
+            var filters = parameters["properties"]!["filtros"]!["properties"]!.AsObject();
+            foreach (var field in new[] { "bairro", "somente_celular", "somente_email", "somente_sem_dominio" }) filters.Remove(field);
+            filters["termo"]!["description"] = "Busca por prefixos em CNPJ, município e ramo, sem nomes ou contatos.";
+            filters["ordem"]!["enum"] = new JsonArray("score", "cnpj", "cidade", "recente", "antiga");
+            if (declaration["name"]!.GetValue<string>() == "buscar_empresas")
+                declaration["description"] = "Encontra empresas do Ceará e exibe os campos públicos na aplicação. A IA recebe apenas contagens; recortes com menos de cinco empresas omitem essas contagens.";
+            else
+            {
+                declaration["description"] = "Calcula contagens de empresas e médias de score, sem indicadores de contato. A IA não recebe grupos com menos de cinco empresas.";
+                parameters["properties"]!["agrupar_por"]!["items"]!["enum"] = new JsonArray("cidade", "segmento", "porte", "abertura");
+                parameters["properties"]!["ordenar_por"]!["enum"] = new JsonArray("contatos", "score_medio");
+            }
+        }
+        return tools;
+    }
 
     private async Task<JsonObject> Generate(JsonObject payload, CancellationToken cancellation)
     {
@@ -59,24 +82,25 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
         { throw new ApiError("O Gemini retornou uma resposta inválida. Tente novamente."); }
     }
 
-    public async Task<JsonObject> Chat(ChatRequest request, CancellationToken cancellation)
+    public async Task<JsonObject> Chat(ChatRequest request, CancellationToken cancellation, string? uf = null)
     {
         request.Validate();
-        if (config["CEARA_PUBLIC"] == "1")
-            throw new ApiError("O chat não está disponível na publicação pública. Consulte empresas, municípios e ramos pelos filtros.", 403);
+        var selectedDatabase = database.ForUf(uf);
         GeminiPrivacy.EnsureSafeRequest(request);
-        if (!Configured) throw new ApiError("Configure GEMINI_API_KEY no servidor para usar o assistente.");
+        if (!Configured) throw new ApiError(PublicationProfile.IsPublic(config)
+            ? "O assistente está temporariamente indisponível. O responsável precisa configurar o Gemini no servidor."
+            : "Configure sua própria GEMINI_API_KEY no arquivo .env e reinicie a aplicação para usar o assistente.");
         if (!ModelId().IsMatch(Model)) throw new ApiError("GEMINI_MODEL possui um identificador inválido.");
         JsonNode context = new JsonObject { ["disponivel"] = false };
         Dictionary<string, object?>? metadata = null;
         try
         {
-            metadata = database.Metadata(cancellation);
+            metadata = selectedDatabase.Metadata(cancellation);
             context = Node(new
             {
-                disponivel = true, versao_receita = metadata["versao_receita"], contatos = metadata["contatos"],
-                municipios = database.Areas("municipios", cancellation).Select(m => m["nome"]),
-                ramos = database.Areas("segmentos", cancellation).Select(r => r["nome"]),
+                disponivel = true, uf = selectedDatabase.Uf, versao_receita = metadata["versao_receita"], contatos = metadata["contatos"],
+                municipios = selectedDatabase.Areas("municipios", cancellation).Select(m => m["nome"]),
+                ramos = selectedDatabase.Areas("segmentos", cancellation).Select(r => r["nome"]),
                 portes = new[] { "Nao informado", "Microempresa", "Pequeno porte", "Medio/grande" }
             })!;
         }
@@ -90,8 +114,10 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
         {
             var payload = new JsonObject
             {
-                ["systemInstruction"] = new JsonObject { ["parts"] = new JsonArray(new JsonObject { ["text"] = Prompt + context.ToJsonString() }) },
-                ["contents"] = contents.DeepClone(), ["tools"] = Tools.DeepClone(),
+                ["systemInstruction"] = new JsonObject { ["parts"] = new JsonArray(new JsonObject { ["text"] = Prompt.Replace("Ceará", Geography.Get(selectedDatabase.Uf).Nome)
+                    + (selectedDatabase.Restricted ? "Esta publicação só consulta o Ceará. Nomes, contatos, bairro e endereço não existem na base pública. O score público usa atividade, porte e ano de abertura. Use apenas os filtros e métricas do esquema de ferramentas disponível.\n" : "")
+                    + context.ToJsonString() }) },
+                ["contents"] = contents.DeepClone(), ["tools"] = ToolSchema(selectedDatabase.Restricted),
                 ["generationConfig"] = new JsonObject { ["temperature"] = 0.3, ["maxOutputTokens"] = 2500 }
             };
             if (turn == 4) payload["toolConfig"] = new JsonObject { ["functionCallingConfig"] = new JsonObject { ["mode"] = "NONE" } };
@@ -121,7 +147,7 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
                     {
                         var query = WireJson.Read<ToolSearch>(args);
                         filters = query.Filtros;
-                        var found = database.Search(new() { Filtros = filters, PorPagina = query.Limite }, cancellation);
+                        var found = selectedDatabase.Search(new() { Filtros = filters, PorPagina = query.Limite }, cancellation);
                         results.Add(Node(new { tipo = "empresas", titulo = "Empresas encontradas", filtros = filters, total = found.Total, itens = found.Itens }));
                         // Free-text filters stay in the local UI. Small result sets
                         // do not send exact counts back to the provider.
@@ -134,13 +160,13 @@ public sealed partial class Gemini(HttpClient http, Database database, IConfigur
                     {
                         var query = WireJson.Read<AnalysisRequest>(args);
                         filters = query.Filtros;
-                        var rows = database.Analyze(query, cancellation);
+                        var rows = selectedDatabase.Analyze(query, cancellation);
                         results.Add(Node(new { tipo = "analise", titulo = "Análise da base", itens = rows, filtros = filters, agrupar_por = query.AgruparPor }));
                         toolResult = Node(new { itens = rows.Where(row => Convert.ToInt64(row["contatos"]) >= 5), limitado_a = query.Limite,
                             nota = "Grupos com menos de cinco empresas são omitidos do envio ao Gemini. A análise completa e os filtros aparecem na aplicação." })!;
                     }
                     else throw new ApiError("Ferramenta não permitida.", 422);
-                    var source = Node(new { fonte = "Receita Federal — recorte CE", versao = metadata?["versao_receita"] ?? "", filtros = filters })!;
+                    var source = Node(new { fonte = $"Receita Federal — recorte {selectedDatabase.Uf}", versao = metadata?["versao_receita"] ?? "", filtros = filters })!;
                     if (!sources.Any(s => JsonNode.DeepEquals(s, source))) sources.Add(source);
                 }
                 catch (ApiError error) { toolResult = new JsonObject { ["erro"] = error.Status == 422 ? "Argumentos inválidos. Corrija conforme o esquema das ferramentas." : error.Message }; }

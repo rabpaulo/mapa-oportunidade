@@ -18,7 +18,7 @@ UFS = {
 
 def main():
     ap = argparse.ArgumentParser(description="Baixa malhas do mapa")
-    ap.add_argument("--uf", nargs="+", choices=["CE"], required=True, help="uma ou mais siglas")
+    ap.add_argument("--uf", nargs="+", type=str.upper, choices=sorted(UFS), required=True, help="uma ou mais siglas")
     ap.add_argument("--dados", default=os.path.join(RAIZ, "data"))
     args = ap.parse_args()
 

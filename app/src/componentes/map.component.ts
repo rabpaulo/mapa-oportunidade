@@ -71,7 +71,7 @@ export class MapComponent implements AfterViewInit {
     this.searchControl.valueChanges.pipe(takeUntilDestroyed()).subscribe(v => this.search.set(v));
     effect(onCleanup => {
       this.base().gerado_em;
-      const subscription = forkJoin([this.api.request<GeoJSON.FeatureCollection>('malhas/malha_23.geojson'), this.api.request<GeoJSON.FeatureCollection>('malhas/malha_br.geojson')])
+      const subscription = forkJoin([this.api.request<GeoJSON.FeatureCollection>('malhas/malha_' + (this.base().codigo_uf ?? '23') + '.geojson'), this.api.request<GeoJSON.FeatureCollection>('malhas/malha_br.geojson')])
         .subscribe({ next: v => { this.geometries.set(v); this.error.set(''); }, error: e => this.error.set(e.message) });
       onCleanup(() => subscription.unsubscribe());
     });
@@ -88,7 +88,7 @@ export class MapComponent implements AfterViewInit {
           style: mapStyle(untracked(this.theme), brasil, data) });
       } catch { this.error.set('Seu navegador não disponibilizou gráficos para o mapa. Explore os municípios pela lista.'); return; }
       this.map = m; this.mapCreated.update(v => v + 1);
-      m.getCanvas().setAttribute('aria-label', 'Mapa interativo do Ceará');
+      m.getCanvas().setAttribute('aria-label', 'Mapa interativo de ' + (this.base().nome_uf ?? this.base().uf ?? 'CE'));
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
       m.addControl(new maplibregl.FullscreenControl({ container: container.parentElement! }), 'top-right');
       m.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');

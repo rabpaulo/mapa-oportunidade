@@ -26,7 +26,7 @@ def test_backup_is_valid_reproducible_and_preserves_source(release_source, tmp_p
     assert manifest['archive_sha256'] == sha256(first / 'snapshot.tar.br')
     assert (release_source / FILES[0]).read_bytes() == original
     with tarfile.open(fileobj=io.BytesIO(brotli.decompress((first / 'snapshot.tar.br').read_bytes()))) as tar:
-        assert tar.getnames() == FILES
+        assert tar.getnames() == list(manifest['files'])
         for entry in tar:
             path = tmp_path / 'restored' / entry.name
             path.parent.mkdir(parents=True, exist_ok=True)

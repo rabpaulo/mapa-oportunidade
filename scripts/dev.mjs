@@ -58,9 +58,9 @@ try {
     await cp(join(root, 'app/dist/ceara/browser'), join(output, 'wwwroot'), { recursive: true });
     await completed('node', ['scripts/fetch-snapshot.mjs', 'deployment/snapshot.json', join(output, 'snapshot'), 'deployment/snapshot-input/snapshot.tar.br']);
     run(dotnet, ['Ceara.Api.dll'], { cwd: output, env: { ...environment, PORT: '3000', CEARA_CONTAINER: '1', ASPNETCORE_ENVIRONMENT: 'Production',
-      CEARA_DATA_DIR: join(output, `data-${process.pid}`), CEARA_SNAPSHOT_ARCHIVE: join(output, 'snapshot/snapshot.tar.br'), CEARA_SNAPSHOT_MANIFEST: join(output, 'snapshot/snapshot.json') } });
+      CEARA_PUBLIC: '1', CEARA_DATA_PROFILE: 'minimizado', CEARA_DATA_DIR: join(output, `data-${process.pid}`), CEARA_SNAPSHOT_ARCHIVE: join(output, 'snapshot/snapshot.tar.br'), CEARA_SNAPSHOT_MANIFEST: join(output, 'snapshot/snapshot.json') } });
   } else if (native) {
-    run(dotnet, ['watch', '--no-hot-reload', '--project', 'server/Ceara.Api', 'run'], { env: { ...environment, CEARA_DATA_DIR: data, PORT: '8000', ASPNETCORE_ENVIRONMENT: 'Development' } });
+    run(dotnet, ['watch', '--no-hot-reload', '--project', 'server/Ceara.Api', 'run'], { env: { ...environment, CEARA_PROJECT_ROOT: root, CEARA_DATA_DIR: data, PORT: '8000', ASPNETCORE_ENVIRONMENT: 'Development' } });
   } else {
     await completed('docker', ['info', '--format', '{{.ServerVersion}}']);
     await completed('docker', ['build', '-f', 'Dockerfile.vercel', '--target', production ? 'production' : 'development', '-t', production ? 'ceara:local' : 'ceara:dev', '.']);
@@ -71,7 +71,7 @@ try {
       if (environment[name] !== undefined) dockerArgs.push('-e', name);
     }
     if (production) dockerArgs.push('-p', '127.0.0.1:3000:8080', 'ceara:local');
-    else dockerArgs.push('-p', '127.0.0.1:8000:8000', '-v', `${root}:/workspace`, '-v', `${data}:/data:ro`, '--user', `${process.getuid()}:${process.getgid()}`,
+    else dockerArgs.push('-p', '127.0.0.1:8000:8000', '-v', `${root}:/workspace`, '-v', `${data}:/data`, '--user', `${process.getuid()}:${process.getgid()}`,
       '-e', 'CEARA_DATA_DIR=/data', '-e', 'DOTNET_CLI_HOME=/tmp', '-e', 'NUGET_PACKAGES=/tmp/nuget', '-e', 'DOTNET_USE_POLLING_FILE_WATCHER=1', 'ceara:dev');
     containerStarted = true; run('docker', dockerArgs);
   }

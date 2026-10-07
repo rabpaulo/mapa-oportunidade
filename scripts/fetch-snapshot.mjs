@@ -9,7 +9,7 @@ if (!manifestPath || !output) throw new Error('Uso: node scripts/fetch-snapshot.
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const required = ['uf/CE/contatos.db', 'ibge/malha_23.geojson', 'ibge/malha_br.geojson'];
 if (!manifest.version || !/^[a-f0-9]{64}$/.test(manifest.archive_sha256)
-    || Object.keys(manifest.files ?? {}).length !== 3 || required.some(name => !/^[a-f0-9]{64}$/.test(manifest.files[name])))
+    || Object.keys(manifest.files ?? {}).length < 3 || Object.keys(manifest.files ?? {}).length > 11 || Object.keys(manifest.files ?? {}).some(name => !required.includes(name) && !/^uf\/CE\/downloads\/[a-f0-9]{24}\/(catalogo\.json|contatos\.db|contatos\.csv\.gz|municipios\.csv\.gz|segmentos\.csv\.gz|metadados\.json|malha_23\.geojson|malha_br\.geojson)$/.test(name)) || required.some(name => !/^[a-f0-9]{64}$/.test(manifest.files[name])))
   throw new Error('Manifesto de snapshot inválido. Prepare um release validado.');
 await mkdir(output, { recursive: true });
 const archive = join(output, 'snapshot.tar.br');

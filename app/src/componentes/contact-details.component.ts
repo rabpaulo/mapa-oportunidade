@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, computed, ElementRef, inject, input, OnDestroy, output, viewChild } from '@angular/core';
 import { Store } from '../lib/store';
-import { type Contact } from '../lib/api';
+import { type Contact, contactLabel } from '../lib/api';
 import { IconComponent } from './icon.component';
 
 @Component({
@@ -8,9 +8,9 @@ import { IconComponent } from './icon.component';
   imports: [IconComponent],
   template: `
     <div class="detail-backdrop" (click)="close.emit()">
-      <aside #panel tabindex="-1" class="contact-detail" role="dialog" aria-modal="true" [attr.aria-label]="'Detalhes de ' + contact().nome" (click)="$event.stopPropagation()">
+      <aside #panel tabindex="-1" class="contact-detail" role="dialog" aria-modal="true" [attr.aria-label]="'Detalhes de ' + contactLabel(contact())" (click)="$event.stopPropagation()">
         <header><span class="eyebrow">Perfil da empresa</span><button class="icon-button" aria-label="Fechar detalhes" (click)="close.emit()"><ceara-icon name="x" [size]="19" /></button></header>
-        <span class="score large">{{ contact().score }}<small>/100</small></span><h2>{{ contact().nome }}</h2><p class="muted">{{ contact().empresa }}</p><span class="tag">{{ contact().segmento }}</span>
+        <span class="score large">{{ contact().score }}<small>/100</small></span><h2>{{ contactLabel(contact()) }}</h2>@if (!store.restricted()) { <p class="muted">{{ contact().empresa }}</p> }<span class="tag">{{ contact().segmento }}</span>
         <dl class="detail-list">
           @for (field of fields(); track field[0]) { <div><dt>{{ field[0] }}</dt><dd>{{ value(field[1]) }}</dd></div> }
         </dl>
@@ -25,6 +25,7 @@ import { IconComponent } from './icon.component';
     </div>`
 })
 export class ContactDetailsComponent implements AfterViewInit, OnDestroy {
+  readonly contactLabel = contactLabel;
   readonly store = inject(Store);
   readonly contact = input.required<Contact>();
   readonly close = output<void>();

@@ -15,6 +15,8 @@ sys.path.insert(0, str(ROOT))
 from pipeline.config import data_dir
 from pipeline.database import validate_database
 from pipeline.locking import acquire_collection_lock
+from pipeline.downloads import prepare_downloads
+from pipeline.publication import validate_public
 
 FILES = ['uf/CE/contatos.db', 'ibge/malha_23.geojson', 'ibge/malha_br.geojson']
 
@@ -24,14 +26,14 @@ def sha256(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def prepare(source: Path, output: Path):
+def prepare(source: Path, output: Path, public_only=False):
     if not source.is_dir():
         raise ValueError('Diretório de dados ausente.')
     with acquire_collection_lock(source):
-        return _prepare(source, output)
+        return _prepare(source, output, public_only)
 
 
-def _prepare(source: Path, output: Path):
+def _prepare(source: Path, output: Path, public_only=False):
     validate_database(source / FILES[0])
     if output.exists():
         raise ValueError('O destino do release já existe. Escolha um novo diretório.')
@@ -50,6 +52,8 @@ def _prepare(source: Path, output: Path):
         validate_database(database)
         with sqlite3.connect(database.as_uri() + '?mode=ro', uri=True) as conn:
             metadata = dict(conn.execute('SELECT chave, valor FROM meta'))
+            if public_only or metadata.get('publicacao_restrita') == '1':
+                validate_public(conn)
         for name in FILES[1:]:
             destination = staging / 'data' / name
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +61,8 @@ def _prepare(source: Path, output: Path):
             if not isinstance(content, dict) or content.get('type') != 'FeatureCollection' or not isinstance(content.get('features'), list):
                 raise ValueError(f'Malha GeoJSON inválida: {name}')
             shutil.copyfile(source / name, destination)
+        bundle = prepare_downloads(staging / 'data')
+        files = FILES + [str(path.relative_to(staging / 'data')) for path in sorted(bundle.iterdir())]
         release = staging / 'release'
         release.mkdir()
         archive = release / 'snapshot.tar.br'
@@ -64,7 +70,7 @@ def _prepare(source: Path, output: Path):
         tar_path = staging / 'snapshot.tar'
         with tar_path.open('wb') as raw:
             with tarfile.open(fileobj=raw, mode='w', format=tarfile.USTAR_FORMAT) as tar:
-                for name in FILES:
+                for name in files:
                     path = staging / 'data' / name
                     entry = tarfile.TarInfo(name)
                     entry.size = path.stat().st_size
@@ -82,7 +88,7 @@ def _prepare(source: Path, output: Path):
             'url': None,
             'version': metadata['versao_receita'] + '/' + metadata['gerado_em'],
             'archive_sha256': sha256(archive),
-            'files': {name: sha256(staging / 'data' / name) for name in FILES},
+            'files': {name: sha256(staging / 'data' / name) for name in files},
         }
         (release / 'snapshot.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
         shutil.move(str(release), output)
@@ -94,9 +100,10 @@ def main():
     parser.add_argument('--dados', type=Path, default=data_dir())
     parser.add_argument('--saida', type=Path, required=True)
     parser.add_argument('--fixar', action='store_true', help='Fixa manifesto e arquivo local para o próximo build do container')
+    parser.add_argument('--publico', action='store_true', help='Exige esquema público minimizado v2')
     args = parser.parse_args()
     try:
-        manifest = prepare(args.dados.expanduser().resolve(), args.saida.expanduser().resolve())
+        manifest = prepare(args.dados.expanduser().resolve(), args.saida.expanduser().resolve(), public_only=args.publico or args.fixar)
         if args.fixar:
             pin(args.saida.expanduser().resolve())
     except (ValueError, sqlite3.Error, OSError) as error:

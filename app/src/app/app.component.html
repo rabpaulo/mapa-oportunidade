@@ -1,18 +1,22 @@
-<div class="app-shell">
+@if (showIntro()) {
+  <ceara-intro (open)="enterProject($event)" (finished)="finishIntro()" />
+}
+@if (projectOpened()) {
+<div class="app-shell" [attr.inert]="showIntro() ? '' : null">
   <a class="skip-link" href="#main">Ir para o conteúdo</a>
   <header class="site-header">
     <button class="brand" (click)="store.screen.set('mapa')" aria-label="Mapa de Oportunidades Ceará, início"><span>Mapa de Oportunidades<strong>Ceará</strong></span></button>
     <nav aria-label="Navegação principal">
-      @for (item of nav(); track item.id) {
+      @for (item of nav; track item.id) {
         <button [class.active]="store.screen() === item.id" [attr.aria-current]="store.screen() === item.id ? 'page' : null" (click)="store.screen.set(item.id)"><ceara-icon [name]="item.icon" /><span>{{ item.title }}</span></button>
       }
     </nav>
-    <div class="header-end"><span class="local-status"><span class="status-dot" [attr.data-ready]="!!base()?.disponivel"></span>Base do Ceará</span><button class="icon-button" (click)="toggleTheme()" [attr.aria-label]="theme() === 'claro' ? 'Ativar tema escuro' : 'Ativar tema claro'"><ceara-icon [name]="theme() === 'claro' ? 'moon' : 'sun'" [size]="18" /></button></div>
+    <div class="header-end">@if (!store.publicDeployment() && store.ufs().length > 1) { <label class="uf-picker">Estado <select aria-label="Selecionar estado" [ngModel]="store.uf()" (ngModelChange)="changeUf($event)">@for (state of store.ufs(); track state.uf) { <option [value]="state.uf" [disabled]="!state.disponivel">{{ state.uf }} · {{ state.nome }}{{ state.disponivel ? '' : ' (não coletado)' }}</option> }</select></label> }<span class="local-status"><span class="status-dot" [attr.data-ready]="!!base()?.disponivel"></span>{{ base()?.nome_uf ?? store.uf() }}</span><button class="icon-button" (click)="toggleTheme()" [attr.aria-label]="theme() === 'claro' ? 'Ativar tema escuro' : 'Ativar tema claro'"><ceara-icon [name]="theme() === 'claro' ? 'moon' : 'sun'" [size]="18" /></button></div>
   </header>
-  <main id="main">
+  <main id="main" tabindex="-1">
     <div class="page-heading"><div><h1>{{ heading()[0] }}</h1><p>{{ heading()[1] }}</p></div><div class="edition"><span>Cadastro Receita Federal</span><strong>{{ date(base()?.versao_receita) }}</strong></div></div>
-    @if (base()?.disponivel && base()?.perfil_dados === 'integral') {
-      <div class="publication-note"><p><strong>Base integral de fonte pública.</strong> Cadastro proveniente dos Dados Abertos CNPJ da Receita Federal, obtido pelo espelho Casa dos Dados. Informações podem estar desatualizadas. O score é calculado pela aplicação. <a [href]="repositoryUrl" target="_blank" rel="noopener noreferrer">Código e execução local no GitHub</a>.</p></div>
+    @if (base()?.disponivel) {
+      <div class="publication-note"><p><strong>{{ store.restricted() ? 'Base pública minimizada do Ceará.' : 'Base local integral.' }}</strong> Cadastro proveniente dos Dados Abertos CNPJ da Receita Federal, obtido pelo espelho Casa dos Dados. Informações podem estar desatualizadas. O score é calculado pela aplicação. <a [href]="repositoryUrl" target="_blank" rel="noopener noreferrer">Código e execução local no GitHub</a>.</p></div>
     }
     @if (store.screen() === 'privacidade') {
       <ceara-privacy />
@@ -20,7 +24,7 @@
       <div class="empty error" role="alert"><h2>Não foi possível abrir a aplicação</h2><p>{{ error() }}</p><button class="button" (click)="reload()">Tentar novamente</button></div>
     } @else if (base(); as info) {
       @switch (store.screen()) {
-        @case ('assistente') { @if (!info.hospedagem_publica) { <ceara-assistant [base]="info" /> } }
+        @case ('assistente') { <ceara-assistant [base]="info" /> }
         @case ('base') { <ceara-base [base]="info" /> }
         @default {
           @if (!info.disponivel) {
@@ -28,19 +32,20 @@
           } @else {
             @switch (store.screen()) {
               @case ('mapa') {
-                <div class="stats-strip"><div><span>{{ info.publicacao_restrita ? 'Empresas publicadas' : 'Empresas com contato' }}</span><strong>{{ number(info.contatos) }}</strong></div><div><span>Municípios</span><strong>{{ number(info.municipios) }}<small>/ 184</small></strong></div><div><span>{{ info.publicacao_restrita ? 'Contato e endereço' : 'Com celular' }}</span><strong>{{ info.publicacao_restrita ? 'Não publicados' : percent(info.com_celular ?? 0, info.contatos ?? 0) }}</strong></div><div><span>Ramos de atividade</span><strong>{{ number(info.ramos) }}</strong></div></div>
+                <div class="stats-strip"><div><span>{{ info.publicacao_restrita ? 'Empresas publicadas' : 'Empresas com contato' }}</span><strong>{{ number(info.contatos) }}</strong></div><div><span>Municípios</span><strong>{{ number(info.municipios_mapeados ?? info.municipios) }}<small>/ {{ info.total_municipios ?? 184 }}</small></strong></div><div><span>{{ info.publicacao_restrita ? 'Contato e endereço' : 'Com celular' }}</span><strong>{{ info.publicacao_restrita ? 'Não publicados' : percent(info.com_celular ?? 0, info.contatos ?? 0) }}</strong></div><div><span>Ramos de atividade</span><strong>{{ number(info.ramos) }}</strong></div></div>
                 @defer (on immediate) { <ceara-map [base]="info" [areas]="areas()" [theme]="theme()" (openCity)="openCity($event)" /> }
-                <div class="map-bottom-note"><p>{{ info.publicacao_restrita ? info.recorte : 'Estabelecimentos ativos na data do cadastro, com e-mail ou celular aproveitável.' }}</p>@if (!info.hospedagem_publica) { <button class="text-button" (click)="store.screen.set('assistente')">Consultar com o assistente <ceara-icon name="arrow-up-right" [size]="15" /></button> }</div>
+                <div class="map-bottom-note">@if (info.contatos_sem_malha) { <p>{{ number(info.contatos_sem_malha) }} registro(s) com município inconsistente na origem permanecem nos downloads e nas consultas, sem projeção no mapa.</p> }<p>{{ info.publicacao_restrita ? info.recorte : 'Estabelecimentos ativos na data do cadastro, com e-mail ou celular aproveitável.' }}</p><button class="text-button" (click)="store.screen.set('assistente')">Consultar com o assistente <ceara-icon name="arrow-up-right" [size]="15" /></button></div>
               }
-              @case ('empresas') { <ceara-companies [areas]="areas()" [segments]="segments()" [generation]="info.gerado_em" /> }
+              @case ('empresas') { <ceara-companies [areas]="areas()" [segments]="segments()" [generation]="store.uf() + '/' + info.gerado_em" /> }
               @case ('ramos') { <ceara-segments [segments]="segments()" (openSegment)="openSegment($event)" /> }
             }
           }
         }
       }
     } @else {
-      <div class="loading-page"><div class="skeleton"></div><div class="skeleton"></div><span role="status">Abrindo a base do Ceará…</span></div>
+      <div class="loading-page"><div class="skeleton"></div><div class="skeleton"></div><span role="status">Abrindo a base de {{ store.uf() }}…</span></div>
     }
   </main>
   <footer class="site-footer"><span>Mapa de Oportunidades Ceará · <button class="text-button" (click)="store.screen.set('privacidade')">Privacidade e atendimento</button></span><span>Dados Receita Federal e IBGE <span class="footer-separator">/</span> <a [href]="repositoryUrl" target="_blank" rel="noopener noreferrer">Código e execução local</a> @if (store.publicDeployment()) { · <a href="/codigo-fonte.tar.gz">Código desta versão</a> } · AGPL-3.0</span></footer>
 </div>
+}

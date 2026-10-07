@@ -2,13 +2,18 @@ namespace Ceara.Api;
 
 internal static class LocalEnvironment
 {
+    public static string ProjectRoot()
+    {
+        var root = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (root.Parent is not null && !File.Exists(Path.Combine(root.FullName, "global.json"))) root = root.Parent;
+        return root.FullName;
+    }
     public static void Load(ConfigurationManager config)
     {
         // Only local launches read .env. Images never contain this file.
         if (config["VERCEL"] == "1" || config["CEARA_CONTAINER"] == "1") return;
-        var root = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (root.Parent is not null && !File.Exists(Path.Combine(root.FullName, "global.json"))) root = root.Parent;
-        var path = Path.Combine(root.FullName, ".env");
+        var root = ProjectRoot();
+        var path = Path.Combine(root, ".env");
         var values = new Dictionary<string, string?>();
         foreach (var line in File.Exists(path) ? File.ReadLines(path) : [])
         {
@@ -19,6 +24,6 @@ internal static class LocalEnvironment
             if (config[name] is null) values[name] = parts[1].Trim().Trim('"', '\'');
         }
         config.AddInMemoryCollection(values);
-        config["CEARA_DATA_DIR"] ??= Path.Combine(root.FullName, "data");
+        config["CEARA_DATA_DIR"] ??= Path.Combine(root, "data");
     }
 }

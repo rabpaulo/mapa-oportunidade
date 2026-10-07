@@ -74,6 +74,7 @@ h1, h2, h3 { line-height: 1.15; letter-spacing: -.04em; font-weight: 600; text-w
 .icon-button { width: 32px; height: 32px; display: inline-flex; justify-content: center; align-items: center; border-radius: 6px; color: var(--muted); flex-shrink: 0; }
 .icon-button:hover { background: var(--soft); color: var(--accent); }
 main { flex: 1; min-width: 0; }
+main[tabindex='-1']:focus { outline: none; }
 .page-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 0 18px; }
 .eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .page-heading h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.03em; }
@@ -355,7 +356,8 @@ code, pre { font-family: var(--font-geist-mono), monospace; }
   .table-toolbar { flex-wrap: wrap; gap: 8px; }
   .table-toolbar > .search-input { flex-basis: 100%; }
   .table-toolbar > .button { flex: 1; padding: 10px; font-size: 12px; }
-  .table-context { font-size: 12px; }
+  .table-context { font-size: 12px; flex-wrap: wrap; }
+  .table-context > .button { width: 100%; }
   .pagination { font-size: 12px; }
   .pagination > div { gap: 4px; }
   .segments-panel .table-toolbar { align-items: start; }
@@ -379,3 +381,16 @@ code, pre { font-family: var(--font-geist-mono), monospace; }
 .privacy-content h2 { margin: 32px 0 10px; font-size: 20px; }
 .privacy-content p { margin: 0 0 14px; }
 .privacy-content a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+
+.uf-picker { display: flex; align-items: center; gap: .5rem; font-size: .75rem; }
+.collection-actions { display: flex; flex-wrap: wrap; gap: 16px; margin: 20px 0 12px; }
+.state-selection { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border: 0; margin: 0 0 20px; padding: 0; }
+.state-selection label { display: flex; gap: 8px; align-items: start; font-size: 13px; }
+.state-selection small { display: block; color: var(--muted); font-size: 11px; }
+.reuse-option { display: flex; align-items: start; gap: 8px; font-size: 13px; margin-bottom: 18px; }
+.collection-log { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 12px; border: 1px solid var(--line); }
+.download-item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); padding: 12px 0; font-size: 13px; }
+.download-item > span:last-child { color: var(--muted); }
+.uf-picker select { max-width: 185px; padding: .5rem; background: var(--surface); color: inherit; border: 1px solid var(--border); border-radius: 4px; }
+@media (max-width: 1000px) { .uf-picker select { max-width: 120px; } .header-end .local-status { display: none; } }
+@media (max-width: 760px) { .uf-picker { font-size: 0; } .uf-picker select { font-size: .75rem; max-width: 135px; } }

@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import uuid
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -22,14 +23,16 @@ import cnae
 from gerar_leads import _limpar_nome, BONUS_PORTE
 from pipeline.database import connection, validate_database
 from pipeline.locking import acquire_collection_lock
+from pipeline.publication import SCHEMA, FIELDS, POLICY, CORPORATE_NATURES, validate_public
+from pipeline.downloads import prepare_downloads
 
-PRIVATE_FIELDS = ('email', 'telefone', 'whatsapp', 'endereco', 'bairro')
+PRIVATE_FIELDS = ('nome', 'empresa', 'email', 'telefone', 'whatsapp', 'endereco', 'bairro', 'dominio_proprio', 'tem_celular')
 IDENTIFIER = re.compile(r'(?<!\d)(?:\d{3}[.\s-]?\d{3}[.\s-]?\d{3}[.\s-]?\d{2}|\d{14})(?!\d)|[^\s@]+@[^\s@]+|https?://', re.I)
 
 
 def suppression_hash(cnpj):
-    if not re.fullmatch(r'\d{14}', cnpj):
-        raise ValueError('Informe um CNPJ com 14 dígitos, sem pontuação.')
+    if not re.fullmatch(r'[A-Z0-9]{12}\d{2}', cnpj):
+        raise ValueError('Informe um CNPJ com 14 caracteres, sem pontuação.')
     return hashlib.sha256(cnpj.encode('ascii')).hexdigest()
 
 
@@ -84,55 +87,54 @@ def prepare_public(source: Path, output: Path):
                 metadata = {key: value for key, value in original.execute('SELECT chave, valor FROM meta')
                             if key in ('uf', 'versao_receita', 'baixado_em')}
                 cities = {r['cod_municipio']: r['codigo_ibge'] for r in original.execute('SELECT * FROM municipios')}
-                banco.preparar(conn)
+                conn.executescript(SCHEMA)
                 batch = []
                 for row in original.execute('SELECT * FROM contatos'):
                     counts['originais'] += 1
                     nature = types.get(row['cnpj'][:8], '')
                     # Publish only recognized corporate entities; EI/MEI and
                     # unknown/public-body/individual classifications stay local.
-                    if not re.fullmatch(r'2\d{3}', nature) or nature in ('2135', '2127'):
+                    if nature not in CORPORATE_NATURES:
                         counts['natureza_excluida'] += 1
                         continue
                     if suppression_hash(row['cnpj']) in suppressed:
                         counts['suprimidos'] += 1
                         continue
-                    name, company = _limpar_nome(row['nome']), _limpar_nome(row['empresa'])
-                    if not name or not company or IDENTIFIER.search(name + ' ' + company):
-                        counts['nome_inadequado'] += 1
-                        continue
-                    if name != row['nome'] or company != row['empresa']:
-                        counts['nomes_revisados'] += 1
                     year = row['abertura'] or ''
                     age = datetime.now(ZoneInfo('America/Sao_Paulo')).year - int(year) if year.isdigit() else 0
                     # Public score uses business categories, not personal channels.
                     porte_code = {'Microempresa': '01', 'Pequeno porte': '03', 'Medio/grande': '05'}.get(row['porte'], '00')
                     score = min(round(cnae.peso(row['segmento']) * 2.5 + BONUS_PORTE.get(porte_code, 0) + (5 if age >= 3 else 0)), 100)
-                    values = dict(row)
-                    values.update(nome=name, empresa=company, score=score, dominio_proprio=0, tem_celular=0)
-                    values.update({field: '' for field in PRIVATE_FIELDS})
-                    batch.append(tuple(values[k] for k in banco.COLUNAS) + (banco.chave_busca(name, company, row['cidade'], row['segmento']),))
+                    # Every copied string is either a CNPJ or a controlled category.
+                    values = {key: row[key] for key in FIELDS}
+                    values['score'] = score
+                    batch.append(tuple(values[k] for k in FIELDS))
                     counts['publicados'] += 1
                     if len(batch) >= 5000:
-                        banco.inserir(conn, batch)
+                        conn.executemany('INSERT INTO contatos (' + ','.join(FIELDS) + ') VALUES (' + ','.join('?' for _ in FIELDS) + ')', batch)
                         batch.clear()
                 if batch:
-                    banco.inserir(conn, batch)
+                    conn.executemany('INSERT INTO contatos (' + ','.join(FIELDS) + ') VALUES (' + ','.join('?' for _ in FIELDS) + ')', batch)
             if not counts['publicados']:
                 conn.close()
                 raise ValueError('A base pública ficaria vazia.')
-            metadata.update(publicacao_restrita='1', politica_publicacao='empresas-sem-contatos-v1',
+            metadata.update(publicacao_restrita='1', politica_publicacao=POLICY, geracao=uuid.uuid4().hex,
                             gerado_em=datetime.now(ZoneInfo('America/Sao_Paulo')).strftime('%Y-%m-%d %H:%M'),
-                            recorte='Entidades empresariais, sem empresário individual, contatos pessoais ou endereço; não representa todas as empresas do Ceará.')
-            banco.finalizar(conn, 'CE', metadata, log=lambda _: None)
+                            recorte='Entidades empresariais, sem empresário individual, nomes, contatos ou endereço; não representa todas as empresas do Ceará.')
+            conn.execute("INSERT INTO municipios SELECT cod_municipio,'',cidade,'CE',COUNT(*),AVG(score) FROM contatos GROUP BY cod_municipio,cidade")
+            conn.execute('INSERT INTO segmentos SELECT segmento,COUNT(*),AVG(score) FROM contatos GROUP BY segmento')
+            conn.execute("INSERT INTO contatos_fts(contatos_fts) VALUES('rebuild')")
+            conn.executemany('INSERT INTO meta VALUES (?,?)', [(k, str(v)) for k,v in metadata.items()])
             conn.executemany('UPDATE municipios SET codigo_ibge=? WHERE cod_municipio=?', [(code, city) for city, code in cities.items()])
             conn.commit()
             conn.execute('PRAGMA journal_mode=DELETE')
+            validate_public(conn)
             conn.close()
             validate_database(db)
             (staging / 'ibge').mkdir()
             for name in ('malha_23.geojson', 'malha_br.geojson'):
                 shutil.copyfile(source / 'ibge' / name, staging / 'ibge' / name)
+            prepare_downloads(staging)
             (staging / 'auditoria-publicacao.json').write_text(json.dumps(dict(counts), ensure_ascii=False, indent=2) + '\n')
             shutil.move(staging, output)
     return dict(counts)

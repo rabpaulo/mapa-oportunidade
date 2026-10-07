@@ -1,10 +1,18 @@
 {
   "url": null,
-  "version": "2026-09-14/2026-10-04 17:12",
-  "archive_sha256": "c5265d2eec1f596fc307c0f92cacd348f4c46b7432a93c41abe1edf3a16a4217",
+  "version": "2026-09-14/2026-10-06 09:33",
+  "archive_sha256": "17abd01a5e211851bc44646b8d6507167896f852032c50cf0f9d367d2ffc7e48",
   "files": {
-    "uf/CE/contatos.db": "ad8687c211fdb8fd36166830bfc088860a70d32a56ec7683764e438db61d4819",
+    "uf/CE/contatos.db": "be3213cd0915dcc1347f1ac9f9158bd4993c87adc7879a79d96805c51863077f",
     "ibge/malha_23.geojson": "c7d893b8e7c4daca7f064485c56c3a1ad7a9fa532a0145cd402ea7765bd43ceb",
-    "ibge/malha_br.geojson": "6d0125fce119ea0c78bf2a4a02aa18e4dd2a61a0b648fa555bc82a9aa7b6dcea"
+    "ibge/malha_br.geojson": "6d0125fce119ea0c78bf2a4a02aa18e4dd2a61a0b648fa555bc82a9aa7b6dcea",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/catalogo.json": "092f793f6b5fd9fb60dae2ce2e5889d162ba4e892639c4fab1e446cdf903ecf8",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/contatos.csv.gz": "ee920b64770872a17e6d49e4d80c7d38349dd54cb8e4c22aed41f858e366c91c",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/contatos.db": "be3213cd0915dcc1347f1ac9f9158bd4993c87adc7879a79d96805c51863077f",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/malha_23.geojson": "c7d893b8e7c4daca7f064485c56c3a1ad7a9fa532a0145cd402ea7765bd43ceb",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/malha_br.geojson": "6d0125fce119ea0c78bf2a4a02aa18e4dd2a61a0b648fa555bc82a9aa7b6dcea",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/metadados.json": "372b23913acdbfad985d5375a9e9b7cb0a134eb8af8549d1e27c393ff10a9693",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/municipios.csv.gz": "b97efad78d491b0b9faeeec5e07b2ed716195625cf22f8ff43d22af330abf45b",
+    "uf/CE/downloads/b0bf42dbab4fc21767b4b9d2/segmentos.csv.gz": "282a5b6622740280f1311c00c24458ae0ed8c3030467d6753cee2ca935587615"
   }
 }

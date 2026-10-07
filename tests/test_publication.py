@@ -55,10 +55,10 @@ def test_publication_excludes_ei_unknown_and_suppressions_and_preserves_source(s
         rows = conn.execute('SELECT * FROM contatos').fetchall()
         assert {r['cnpj'] for r in rows} == {'22222222000100', '44444444000100'}
         for row in rows:
-            assert all(row[field] == '' for field in PRIVATE_FIELDS)
-            assert not IDENTIFIER.search(row['nome'] + ' ' + row['empresa'])
+            assert all(field not in row.keys() for field in PRIVATE_FIELDS)
+            assert len(row.keys()) == 9
         assert conn.execute("SELECT valor FROM meta WHERE chave='publicacao_restrita'").fetchone()[0] == '1'
-        assert conn.execute("SELECT COUNT(*) FROM contatos_fts WHERE contatos_fts MATCH 'revisada*'").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM contatos_fts WHERE contatos_fts MATCH '22222222*'").fetchone()[0] == 1
     second = tmp_path / 'public-two'
     assert prepare_public(source, second)['suprimidos'] == 1
 
